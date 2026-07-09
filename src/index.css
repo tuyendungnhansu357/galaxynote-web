@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  /* -- Typography -- */
+  --font-display: "Space Grotesk", "Segoe UI", sans-serif;
+  --font-body: "Inter", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* -- Galaxy palette, matches the PySide6 desktop app -- */
+  --color-void: #05070d;
+  --color-bg: #0a0e1a;
+  --color-panel: #0d1120;
+  --color-panel-2: #131929;
+  --color-line: #1e2840;
+  --color-line-2: #2a3354;
+
+  --color-fg: #e8edf8;
+  --color-fg-dim: #c4cad8;
+  --color-fg-faint: #8b95b0;
+  --color-fg-mute: #4a5068;
+
+  --color-star: #4f8ef7;
+  --color-nebula: #7c6af7;
+  --color-comet: #4ec994;
+  --color-flare: #e05c6a;
+  --color-dwarf: #f0c060;
+}
+
+@layer base {
+  * { border-color: var(--color-line); }
+  html, body, #root { height: 100%; background: var(--color-bg); }
+  body {
+    font-family: var(--font-body);
+    color: var(--color-fg-dim);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { font-family: var(--font-display); color: var(--color-fg); }
+  ::selection { background: color-mix(in srgb, var(--color-star) 35%, transparent); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--color-line-2); border-radius: 6px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-fg-mute); }
+}
+
+@keyframes drift {
+  from { background-position: 0 0; }
+  to { background-position: -600px -600px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; }
+}
+
+@layer utilities {
+  .bg-starfield {
+    background-image:
+      radial-gradient(1px 1px at 20% 30%, #ffffff88 0%, transparent 100%),
+      radial-gradient(1px 1px at 65% 12%, #ffffff66 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 80% 55%, #ffffffaa 0%, transparent 100%),
+      radial-gradient(1px 1px at 40% 70%, #ffffff55 0%, transparent 100%),
+      radial-gradient(1px 1px at 90% 80%, #ffffff77 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 10% 85%, #ffffff99 0%, transparent 100%),
+      radial-gradient(1px 1px at 55% 40%, #ffffff44 0%, transparent 100%),
+      radial-gradient(2px 2px at 30% 55%, #ffffffcc 0%, transparent 100%);
+    background-repeat: repeat;
+    background-size: 600px 600px;
+  }
+}
