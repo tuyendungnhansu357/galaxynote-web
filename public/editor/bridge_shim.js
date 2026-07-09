@@ -69,6 +69,27 @@
     }
   });
 
+  // "Open containing folder" (📂) only makes sense with a local filesystem —
+  // on web there's no folder to open, so we relabel it to a download icon.
+  // This is COSMETIC ONLY: we don't touch the button's click handler or any
+  // other editor logic, it still calls bridge.open_local_folder(path) exactly
+  // as before — EditorFrame.jsx just answers that call differently on web
+  // (triggers a browser download instead of opening a folder).
+  function relabelFolderButtons(root) {
+    root.querySelectorAll('.img-bar button').forEach((btn) => {
+      if (btn.textContent === '📂' && btn.dataset.webRelabeled !== '1') {
+        btn.textContent = '💾';
+        btn.title = 'Tải ảnh về máy';
+        btn.dataset.webRelabeled = '1';
+      }
+    });
+  }
+  const relabelObserver = new MutationObserver(() => relabelFolderButtons(document.body));
+  document.addEventListener('DOMContentLoaded', () => {
+    relabelFolderButtons(document.body);
+    relabelObserver.observe(document.body, { childList: true, subtree: true });
+  });
+
   window.QWebChannel = function (_transport, callback) {
     // Real QWebChannel is async over a socket; ours can resolve on the next
     // microtask so any listeners the caller attaches synchronously still run.
