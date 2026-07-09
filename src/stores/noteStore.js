@@ -82,6 +82,50 @@ export const useNoteStore = create((set, get) => ({
 
   togglePin: async (noteId, isPinned) => get().updateNote(noteId, { is_pinned: isPinned }),
 
+  // Mirrors desktop note_manager.get_daily_note(): find today's daily note
+  // by `daily_date`, or create it if this is the first time today.
+  getOrCreateDailyNote: async () => {
+    const uid = userId()
+    if (!uid) return null
+    const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+
+    const existing = get().notes.find((n) => n.daily_date === today)
+    if (existing) return existing
+
+    const { data: found, error: findError } = await supabase
+      .from('notes')
+      .select('*')
+      .eq('user_id', uid)
+      .eq('daily_date', today)
+      .eq('is_deleted', false)
+      .maybeSingle()
+    if (findError) { set({ error: findError.message }) }
+    if (found) {
+      set({ notes: [found, ...get().notes.filter((n) => n.id !== found.id)] })
+      return found
+    }
+
+    const now = new Date().toISOString()
+    const label = new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
+    const row = {
+      id: crypto.randomUUID(),
+      user_id: uid,
+      title: label,
+      content: '',
+      content_mode: 'daily',
+      created_at: now,
+      updated_at: now,
+      is_pinned: false,
+      is_archived: false,
+      is_deleted: false,
+      daily_date: today,
+    }
+    const { data, error } = await supabase.from('notes').insert(row).select().single()
+    if (error) { set({ error: error.message }); return null }
+    set({ notes: [data, ...get().notes] })
+    return data
+  },
+
   setActiveNoteId: (id) => set({ activeNoteId: id }),
 
   // Called by useSync when a realtime change lands — avoids a full refetch.
