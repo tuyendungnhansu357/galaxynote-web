@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { useNoteStore } from '../../stores/noteStore'
 
 // Same shape as the QSS "dark" theme desktop applies via editorCmd.applyTheme().
@@ -19,13 +19,18 @@ const AUTOSAVE_DELAY_MS = 2000 // mirrors utils/constants.py DEFAULT_SETTINGS.au
  * `_Bridge` QObject does on desktop — just over postMessage instead of
  * QWebChannel. See public/editor/bridge_shim.js for the iframe side.
  *
- * NOTE (Sprint 4 skeleton): image/PDF attachment round-tripping
- * (`request_image_data`, `request_pdf_data`, `request_save_pasted_image`)
- * is not wired up yet — pasted images keep working via inline data: URLs,
- * but the Supabase Storage attachment sync from web comes in a follow-up
- * pass, mirroring the desktop attachment sync already in `sync_manager.py`.
+ * Toolbar commands (bold, insert table, etc.) don't need the bridge at
+ * all — the iframe is same-origin, so `EditorToolbar` calls straight into
+ * `iframe.contentWindow.editorCmd.*` via the imperative handle exposed
+ * here (`exec` / `execRaw`), exactly like desktop's EditorToolbar calls
+ * `self._js("window.editorCmd....")` via QWebEngineView.runJavaScript.
+ *
+ * NOTE (Sprint 4 skeleton): image/PDF attachment round-tripping through
+ * Supabase Storage (`request_image_data`, `request_pdf_data`,
+ * `request_save_pasted_image`) is not wired up yet — pasted/inserted
+ * images work via inline data: URLs in the meantime.
  */
-export default function EditorFrame({ note }) {
+const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
   const iframeRef = useRef(null)
   const readyRef = useRef(false)
   const saveTimerRef = useRef(null)
@@ -38,6 +43,22 @@ export default function EditorFrame({ note }) {
   const respond = useCallback((callId, result) => {
     postToIframe('bridge-response', { callId, result })
   }, [postToIframe])
+
+  useImperativeHandle(ref, () => ({
+    // Calls window.editorCmd.<name>(...args) inside the iframe directly.
+    exec(name, ...args) {
+      const win = iframeRef.current?.contentWindow
+      const fn = win?.editorCmd?.[name]
+      if (typeof fn === 'function') fn.apply(win.editorCmd, args)
+    },
+    // Escape hatch for the one command that isn't an editorCmd method
+    // (heading uses document.execCommand, same as desktop's insert_heading).
+    execRaw(jsFn) {
+      const win = iframeRef.current?.contentWindow
+      if (win) jsFn(win)
+    },
+    isReady: () => readyRef.current,
+  }), [])
 
   useEffect(() => {
     function handleMessage(event) {
@@ -53,6 +74,7 @@ export default function EditorFrame({ note }) {
             readyRef.current = true
             if (note) postToIframe('set-content', { content: note.content || '' })
             postToIframe('apply-theme', { theme: DARK_THEME })
+            onReady?.()
             break
 
           case 'get_theme':
@@ -100,7 +122,7 @@ export default function EditorFrame({ note }) {
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [note, postToIframe, respond, updateNote])
+  }, [note, postToIframe, respond, updateNote, onReady])
 
   // When switching notes, push the new content in once the iframe is ready.
   useEffect(() => {
@@ -119,4 +141,6 @@ export default function EditorFrame({ note }) {
       onLoad={() => { readyRef.current = false }}
     />
   )
-}
+})
+
+export default EditorFrame

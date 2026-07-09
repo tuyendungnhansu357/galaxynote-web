@@ -1,16 +1,25 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { Orbit } from 'lucide-react'
 import EditorFrame from './EditorFrame'
+import EditorToolbar from './EditorToolbar'
 import { useNoteStore } from '../../stores/noteStore'
 import { useTagStore } from '../../stores/tagStore'
 
 export default function NoteEditorWidget({ note }) {
   const [title, setTitle] = useState(note?.title ?? '')
+  const [ready, setReady] = useState(false)
   const updateNote = useNoteStore((s) => s.updateNote)
   const { tags, noteTags } = useTagStore()
   const titleTimer = useRef(null)
+  const editorRef = useRef(null)
 
   useEffect(() => { setTitle(note?.title ?? '') }, [note?.id])
+  // The iframe fully reloads on note switch (EditorFrame keys it by note.id),
+  // so the toolbar must go back to "disabled" until the new document fires
+  // its own on_ready.
+  useEffect(() => { setReady(false) }, [note?.id])
+
+  const handleReady = useCallback(() => setReady(true), [])
 
   function handleTitleChange(e) {
     const value = e.target.value
@@ -35,7 +44,7 @@ export default function NoteEditorWidget({ note }) {
 
   return (
     <div className="flex h-full flex-1 flex-col">
-      <div className="border-b border-line px-8 pb-3 pt-6">
+      <div className="px-8 pb-3 pt-6">
         <input
           value={title}
           onChange={handleTitleChange}
@@ -56,8 +65,9 @@ export default function NoteEditorWidget({ note }) {
           </div>
         )}
       </div>
+      <EditorToolbar editorRef={editorRef} ready={ready} />
       <div className="flex-1 overflow-hidden">
-        <EditorFrame note={note} />
+        <EditorFrame ref={editorRef} note={note} onReady={handleReady} />
       </div>
     </div>
   )
