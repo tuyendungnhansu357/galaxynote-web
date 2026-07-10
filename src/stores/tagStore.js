@@ -124,4 +124,44 @@ export const useTagStore = create((set, get) => ({
   },
 
   setActiveTagId: (id) => set({ activeTagId: id }),
+
+  // Manual "attach this tag to this note" action (TagChipsBar's + picker) —
+  // block_id/highlight stay null since this isn't an inline #tag highlight
+  // inside the block editor (that parser isn't ported to web yet, so every
+  // note_tags row created from web is a plain note-level assignment).
+  assignTagToNote: async (noteId, tagId) => {
+    const uid = userId()
+    const now = new Date().toISOString()
+    if (get().noteTags.some((nt) => nt.note_id === noteId && nt.tag_id === tagId)) return true
+
+    // A previously-removed (soft-deleted) row for this exact pair may
+    // already exist — revive it instead of inserting a duplicate.
+    const { data: existing } = await supabase
+      .from('note_tags')
+      .select('id')
+      .eq('user_id', uid).eq('note_id', noteId).eq('tag_id', tagId).is('block_id', null)
+      .maybeSingle()
+
+    const { error } = existing
+      ? await supabase.from('note_tags').update({ is_deleted: false, updated_at: now }).eq('id', existing.id)
+      : await supabase.from('note_tags').insert({
+          id: crypto.randomUUID(), user_id: uid, note_id: noteId, tag_id: tagId,
+          block_id: null, highlight_start: null, highlight_end: null,
+          updated_at: now, is_deleted: false,
+        })
+
+    if (error) { set({ error: error.message }); return false }
+    set({ noteTags: [...get().noteTags, { note_id: noteId, tag_id: tagId }] })
+    return true
+  },
+
+  removeTagFromNote: async (noteId, tagId) => {
+    const uid = userId()
+    const now = new Date().toISOString()
+    await supabase
+      .from('note_tags')
+      .update({ is_deleted: true, updated_at: now })
+      .eq('user_id', uid).eq('note_id', noteId).eq('tag_id', tagId).is('block_id', null)
+    set({ noteTags: get().noteTags.filter((nt) => !(nt.note_id === noteId && nt.tag_id === tagId)) })
+  },
 }))
