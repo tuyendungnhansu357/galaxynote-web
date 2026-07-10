@@ -1,5 +1,7 @@
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { useNoteStore } from '../../stores/noteStore'
+import { useAuthStore } from '../../stores/authStore'
+import { supabase } from '../../lib/supabase'
 
 // Same shape as the QSS "dark" theme desktop applies via editorCmd.applyTheme().
 const DARK_THEME = {
@@ -12,6 +14,20 @@ const DARK_THEME = {
 }
 
 const AUTOSAVE_DELAY_MS = 2000 // mirrors utils/constants.py DEFAULT_SETTINGS.autosave_delay_ms
+const STORAGE_BUCKET = 'attachments' // same bucket desktop's sync_manager.py pushes to
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+function urlToDataUrl(url) {
+  return fetch(url).then((r) => r.blob()).then(blobToDataUrl)
+}
 
 /**
  * Hosts the unmodified desktop editor (public/editor/editor_template.html)
@@ -25,18 +41,21 @@ const AUTOSAVE_DELAY_MS = 2000 // mirrors utils/constants.py DEFAULT_SETTINGS.au
  * here (`exec` / `execRaw`), exactly like desktop's EditorToolbar calls
  * `self._js("window.editorCmd....")` via QWebEngineView.runJavaScript.
  *
- * NOTE (Sprint 4 skeleton): pasted/inserted images now render immediately
- * (data: URLs are resolved client-side, see `request_save_pasted_image`
- * below) but aren't yet uploaded to Supabase Storage — they're stored
- * inline in the note's content JSON. That's fine for a handful of small
- * images; efficient storage + the `request_image_data` re-hydrate path
- * (for images synced down from desktop as lean local-path references)
- * is the next piece of attachment work, not done in this pass.
+ * Images: `request_image_data`/`request_pdf_data` now download the real
+ * file from Supabase Storage (bucket "attachments", same
+ * `<user_id>/<relative_path>` layout desktop's sync_manager.py uploads to)
+ * and hand back a data: URL — this is what makes images that were added
+ * on desktop (and synced down as lean local-path references) actually
+ * render on web. Images pasted/inserted directly on web still get saved
+ * inline as data: URLs in the note's content JSON rather than uploaded to
+ * Storage — that upload direction (web → Storage) is the next piece of
+ * attachment work, not done in this pass.
  */
 const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
   const iframeRef = useRef(null)
   const readyRef = useRef(false)
   const saveTimerRef = useRef(null)
+  const pendingSaveRef = useRef(null) // { noteId, json } — not yet flushed to Supabase
   const updateNote = useNoteStore((s) => s.updateNote)
 
   const postToIframe = useCallback((type, payload) => {
@@ -46,6 +65,18 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
   const respond = useCallback((callId, result) => {
     postToIframe('bridge-response', { callId, result })
   }, [postToIframe])
+
+  // Saves immediately and clears the debounce — called both by the normal
+  // 2s timer and by the flush-on-hide/unmount paths below, so a refresh or
+  // note switch can't silently drop the last couple seconds of typing.
+  const flushPendingSave = useCallback(() => {
+    if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null }
+    const pending = pendingSaveRef.current
+    if (pending) {
+      pendingSaveRef.current = null
+      updateNote(pending.noteId, { content: pending.json })
+    }
+  }, [updateNote])
 
   useImperativeHandle(ref, () => ({
     // Calls window.editorCmd.<name>(...args) inside the iframe directly.
@@ -61,7 +92,27 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
       if (win) jsFn(win)
     },
     isReady: () => readyRef.current,
-  }), [])
+    flushPendingSave,
+  }), [flushPendingSave])
+
+  // Flush before the tab actually disappears — `visibilitychange` fires
+  // reliably before unload/refresh in every major browser (unlike
+  // `beforeunload`, which can't be counted on to let an async save finish).
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState === 'hidden') flushPendingSave()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('pagehide', flushPendingSave)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('pagehide', flushPendingSave)
+    }
+  }, [flushPendingSave])
+
+  // Flush when switching away from this note too (component unmounts on
+  // note-switch since NoteEditorWidget is keyed by note.id).
+  useEffect(() => () => flushPendingSave(), [flushPendingSave])
 
   useEffect(() => {
     function handleMessage(event) {
@@ -86,10 +137,9 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
 
           case 'on_change': {
             const json = args[0]
+            if (note) pendingSaveRef.current = { noteId: note.id, json }
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-            saveTimerRef.current = setTimeout(() => {
-              if (note) updateNote(note.id, { content: json })
-            }, AUTOSAVE_DELAY_MS)
+            saveTimerRef.current = setTimeout(flushPendingSave, AUTOSAVE_DELAY_MS)
             break
           }
 
@@ -103,14 +153,7 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
 
           // Pasted image: JS already has the bytes as a data: URL (or an
           // http(s) URL for images dragged in from another page) and is
-          // waiting for us to resolve the placeholder it created. Desktop
-          // does this by saving to disk then calling back into JS via
-          // editorCmd.updateImageSrc(tid, dataUrl, localPath). We don't have
-          // Storage upload wired up yet, so we skip the "save to a lean
-          // local path" step and just hand the data: URL straight back —
-          // the image renders immediately, it just isn't deduplicated/
-          // stored efficiently in Supabase Storage yet (that's the
-          // "attachment upload" work still on the list).
+          // waiting for us to resolve the placeholder it created.
           case 'request_save_pasted_image': {
             const [src, tempId] = args
             const win = iframeRef.current?.contentWindow
@@ -120,14 +163,7 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
               // http(s) source — try to fetch it client-side; CORS will
               // block this for most third-party sites (same limitation as
               // Import URL), so failure here is expected, not a bug.
-              fetch(src)
-                .then((r) => r.blob())
-                .then((blob) => new Promise((resolve, reject) => {
-                  const reader = new FileReader()
-                  reader.onload = () => resolve(reader.result)
-                  reader.onerror = reject
-                  reader.readAsDataURL(blob)
-                }))
+              urlToDataUrl(src)
                 .then((dataUrl) => win?.editorCmd?.updateImageSrc?.(tempId, dataUrl, ''))
                 .catch(() => win?.editorCmd?.updateImageSrc?.(tempId, '', ''))
             } else {
@@ -139,16 +175,29 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
           case 'download_and_save_image': {
             const [src, tempId] = args
             const win = iframeRef.current?.contentWindow
-            fetch(src)
-              .then((r) => r.blob())
-              .then((blob) => new Promise((resolve, reject) => {
-                const reader = new FileReader()
-                reader.onload = () => resolve(reader.result)
-                reader.onerror = reject
-                reader.readAsDataURL(blob)
-              }))
+            urlToDataUrl(src)
               .then((dataUrl) => win?.editorCmd?.updateImageSrc?.(tempId, dataUrl, ''))
               .catch(() => win?.editorCmd?.updateImageSrc?.(tempId, '', ''))
+            break
+          }
+
+          // Images/PDFs that were added on DESKTOP get saved as a lean
+          // "local path" reference (src stripped to keep SQLite/Postgres
+          // content small) — the real bytes live in Supabase Storage.
+          // This downloads them and hands back a data: URL so they render.
+          case 'request_image_data':
+          case 'request_pdf_data': {
+            const [relativePath] = args
+            const uid = useAuthStore.getState().user?.id
+            if (!uid || !relativePath) { respond(callId, ''); break }
+            supabase.storage
+              .from(STORAGE_BUCKET)
+              .download(`${uid}/${relativePath}`)
+              .then(({ data, error }) => {
+                if (error || !data) { respond(callId, ''); return }
+                return blobToDataUrl(data).then((dataUrl) => respond(callId, dataUrl))
+              })
+              .catch(() => respond(callId, ''))
             break
           }
 
@@ -157,7 +206,9 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
           // itself is relabeled 💾 by bridge_shim.js, this is where the
           // actual behavior differs. `path` is the image's dataset.local
           // value; we find that exact <img> in the iframe doc and download
-          // whatever bytes it currently has.
+          // whatever bytes it currently has (which, now that
+          // request_image_data actually fetches from Storage, includes
+          // images that were originally added on desktop too).
           case 'open_local_folder': {
             const [path] = args
             const win = iframeRef.current?.contentWindow
@@ -172,14 +223,7 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
               a.click()
               a.remove()
             } else {
-              // Image was synced down from desktop as a lean local-path
-              // reference and never had its bytes fetched into the browser
-              // (that needs the Supabase Storage download path, not built
-              // yet) — nothing to save client-side yet.
-              window.alert(
-                'Ảnh này chưa được tải về trình duyệt (cần tính năng tải từ Supabase ' +
-                'Storage, đang phát triển). Mở note trên bản desktop để xem/tải ảnh gốc.'
-              )
+              window.alert('Ảnh này chưa tải xong hoặc không tìm thấy trên Supabase Storage.')
             }
             break
           }
@@ -187,8 +231,6 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
           // Not yet implemented on the web side — see note above. Left
           // unanswered so any awaiting callback simply never fires, which
           // the editor already treats as "no data available".
-          case 'request_image_data':
-          case 'request_pdf_data':
           case 'get_note_list':
           case 'on_task_toggle':
           case 'on_style_change':
@@ -206,7 +248,7 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [note, postToIframe, respond, updateNote, onReady])
+  }, [note, postToIframe, respond, flushPendingSave, onReady])
 
   // When switching notes, push the new content in once the iframe is ready.
   useEffect(() => {

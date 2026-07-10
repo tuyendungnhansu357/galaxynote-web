@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import { useSync } from './hooks/useSync'
 import LoadingScreen from './components/ui/LoadingScreen'
+import ErrorToast from './components/ui/ErrorToast'
 import AuthPage from './pages/AuthPage'
 import HomePage from './pages/HomePage'
 
@@ -24,6 +25,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <ErrorToast />
       <Routes>
         <Route
           path="/auth"
