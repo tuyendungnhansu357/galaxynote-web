@@ -49,7 +49,7 @@ export default function NoteEditorWidget({ note }) {
         />
         <TagChipsBar noteId={note.id} />
       </div>
-      <EditorToolbar editorRef={editorRef} ready={ready} />
+      <EditorToolbar editorRef={editorRef} ready={ready} noteId={note.id} />
       <div className="flex-1 overflow-hidden">
         <EditorFrame ref={editorRef} note={note} onReady={handleReady} />
       </div>

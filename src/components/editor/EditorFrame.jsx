@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 
 import { useNoteStore } from '../../stores/noteStore'
 import { useAuthStore } from '../../stores/authStore'
 import { supabase } from '../../lib/supabase'
+import { uploadImageBlob, dataUrlToBlob } from '../../lib/attachments'
 
 // Same shape as the QSS "dark" theme desktop applies via editorCmd.applyTheme().
 const DARK_THEME = {
@@ -152,19 +153,33 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
             break
 
           // Pasted image: JS already has the bytes as a data: URL (or an
-          // http(s) URL for images dragged in from another page) and is
-          // waiting for us to resolve the placeholder it created.
+          // http(s) URL for images dragged in from another page). We upload
+          // to Supabase Storage (same bucket/path convention as desktop's
+          // sync_manager.py) and hand back both the data: URL (for instant
+          // display) and the relative_path (so the note's saved JSON stays
+          // lean — src gets blanked, only `local` persists — exactly like
+          // desktop, and so desktop's own _pull_attachments() can discover
+          // and download this file too).
           case 'request_save_pasted_image': {
             const [src, tempId] = args
             const win = iframeRef.current?.contentWindow
             if (src && src.startsWith('data:image')) {
-              win?.editorCmd?.updateImageSrc?.(tempId, src, '')
+              uploadImageBlob(dataUrlToBlob(src), note?.id)
+                .then((relativePath) => win?.editorCmd?.updateImageSrc?.(tempId, src, relativePath))
+                .catch((err) => {
+                  console.warn('[attachments] upload thất bại, giữ tạm dạng inline:', err)
+                  win?.editorCmd?.updateImageSrc?.(tempId, src, '')
+                })
             } else if (src) {
               // http(s) source — try to fetch it client-side; CORS will
               // block this for most third-party sites (same limitation as
               // Import URL), so failure here is expected, not a bug.
               urlToDataUrl(src)
-                .then((dataUrl) => win?.editorCmd?.updateImageSrc?.(tempId, dataUrl, ''))
+                .then((dataUrl) =>
+                  uploadImageBlob(dataUrlToBlob(dataUrl), note?.id)
+                    .then((relativePath) => win?.editorCmd?.updateImageSrc?.(tempId, dataUrl, relativePath))
+                    .catch(() => win?.editorCmd?.updateImageSrc?.(tempId, dataUrl, ''))
+                )
                 .catch(() => win?.editorCmd?.updateImageSrc?.(tempId, '', ''))
             } else {
               win?.editorCmd?.updateImageSrc?.(tempId, '', '')
@@ -176,7 +191,11 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
             const [src, tempId] = args
             const win = iframeRef.current?.contentWindow
             urlToDataUrl(src)
-              .then((dataUrl) => win?.editorCmd?.updateImageSrc?.(tempId, dataUrl, ''))
+              .then((dataUrl) =>
+                uploadImageBlob(dataUrlToBlob(dataUrl), note?.id)
+                  .then((relativePath) => win?.editorCmd?.updateImageSrc?.(tempId, dataUrl, relativePath))
+                  .catch(() => win?.editorCmd?.updateImageSrc?.(tempId, dataUrl, ''))
+              )
               .catch(() => win?.editorCmd?.updateImageSrc?.(tempId, '', ''))
             break
           }

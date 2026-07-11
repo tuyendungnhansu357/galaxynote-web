@@ -6,6 +6,7 @@ import {
   Table, Image as ImageIcon, Link as LinkIcon, Smile, Code, Quote, Lightbulb,
   Video,
 } from 'lucide-react'
+import { uploadImageBlob } from '../../lib/attachments'
 
 const FONT_FAMILIES = [
   'Segoe UI', 'Arial', 'Calibri', 'Georgia', 'Times New Roman', 'Tahoma',
@@ -45,7 +46,7 @@ function Sep() {
  * These need either a native file picker round-trip or a dialog UI that's
  * out of scope for the Sprint 4 skeleton pass.
  */
-export default function EditorToolbar({ editorRef, ready }) {
+export default function EditorToolbar({ editorRef, ready, noteId }) {
   const [painterActive, setPainterActive] = useState(false)
   const fileInputRef = useRef(null)
 
@@ -91,7 +92,16 @@ export default function EditorToolbar({ editorRef, ready }) {
     e.target.value = ''
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => exec('insertImage', reader.result, '')
+    reader.onload = async () => {
+      const dataUrl = reader.result
+      try {
+        const relativePath = await uploadImageBlob(file, noteId)
+        exec('insertImage', dataUrl, relativePath)
+      } catch (err) {
+        console.warn('[attachments] upload thất bại, chèn tạm dạng inline:', err)
+        exec('insertImage', dataUrl, '')
+      }
+    }
     reader.readAsDataURL(file)
   }
 
