@@ -23,16 +23,30 @@
   const CALLBACK_METHODS = new Set([
     'get_theme',
     'get_note_list',
+    'get_tags_json',
     'request_image_data',
     'request_pdf_data',
   ]);
 
   function postToParent(method, args) {
     const callId = `${method}-${++_seq}`;
-    window.parent.postMessage(
-      { source: 'galaxynote-editor', type: 'bridge-call', method, args, callId },
-      '*'
-    );
+    try {
+      window.parent.postMessage(
+        { source: 'galaxynote-editor', type: 'bridge-call', method, args, callId },
+        '*'
+      );
+    } catch (err) {
+      // Most likely a DataCloneError from an argument that can't be
+      // structured-cloned (e.g. a bridge method we haven't registered in
+      // CALLBACK_METHODS yet, so its trailing callback function got treated
+      // as a plain argument). This call site is often inside a larger
+      // synchronous init sequence (e.g. the QWebChannel bootstrap below) —
+      // letting this throw uncaught would silently skip every line that
+      // comes after it in that sequence, which is worse than one missing
+      // bridge call. Log it loudly instead so it's visible without taking
+      // down unrelated setup code.
+      console.error(`[bridge_shim] postMessage thất bại cho "${method}" — có thể thiếu trong CALLBACK_METHODS:`, err);
+    }
     return callId;
   }
 

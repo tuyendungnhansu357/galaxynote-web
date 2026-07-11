@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { useNoteStore } from '../../stores/noteStore'
+import { useTagStore } from '../../stores/tagStore'
 import { useAuthStore } from '../../stores/authStore'
 import { supabase } from '../../lib/supabase'
 import { uploadImageBlob, dataUrlToBlob } from '../../lib/attachments'
@@ -134,6 +135,14 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
 
           case 'get_theme':
             respond(callId, DARK_THEME)
+            break
+
+          // Used by the editor's inline #tag highlighting (_loadTagsMap in
+          // editor_template.html) to color #tag mentions as you type.
+          case 'get_tags_json':
+            respond(callId, JSON.stringify(
+              useTagStore.getState().tags.map((t) => ({ id: t.id, name: t.name, color: t.color || '#4f8ef7' }))
+            ))
             break
 
           case 'on_change': {
