@@ -2118,7 +2118,7 @@ function showTaskMenu(row, x, y){
   inp.style.cssText = 'background:#1e2030;color:#cdd6f4;border:1px solid #4a5068;border-radius:4px;padding:3px 6px;font-size:12px;width:140px;';
   inp.addEventListener('change', () => {
     const val = inp.value; // yyyy-mm-dd or ""
-    if(_bridge) _bridge.on_task_set_due(blockId, val);
+    if(window.bridge) window.bridge.on_task_set_due(blockId, val);
     _updateTaskDueBadge(row, val);
     closeMenus(); notify();
   });
@@ -2128,7 +2128,7 @@ function showTaskMenu(row, x, y){
   const sep2 = document.createElement('div'); sep2.className='ctx-sep'; menu.appendChild(sep2);
   if(curDate){
     menu.appendChild(mk('🗑  Xóa ngày hết hạn', () => {
-      if(_bridge) _bridge.on_task_set_due(blockId, '');
+      if(window.bridge) window.bridge.on_task_set_due(blockId, '');
       _updateTaskDueBadge(row, '');
       notify();
     }));
@@ -2963,9 +2963,9 @@ document.addEventListener('click', e => {
   if(!link) return;
   e.preventDefault();
   const noteId = link.dataset.noteId;
-  if(noteId && _bridge) {
+  if(noteId && window.bridge) {
     console.log(`[wiki-link] clicked → noteId=${noteId}`);
-    _bridge.on_link_click(noteId);
+    window.bridge.on_link_click(noteId);
   }
 });
 
