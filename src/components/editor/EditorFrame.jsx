@@ -161,6 +161,12 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
             if (args[0]) window.open(args[0], '_blank', 'noopener,noreferrer')
             break
 
+          // A [[wiki-link]] was clicked — switch to that note, same as
+          // desktop's _Bridge.on_link_click → EventBus.note_opened.
+          case 'on_link_click':
+            if (args[0]) useNoteStore.getState().setActiveNoteId(args[0])
+            break
+
           // Pasted image: JS already has the bytes as a data: URL (or an
           // http(s) URL for images dragged in from another page). We upload
           // to Supabase Storage (same bucket/path convention as desktop's
@@ -256,10 +262,17 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
             break
           }
 
+          // Powers the [[wiki-link autocomplete popup and the "copy block
+          // to note" picker menu — both just want [{id, title}, ...].
+          case 'get_note_list':
+            respond(callId, JSON.stringify(
+              useNoteStore.getState().notes.map((n) => ({ id: n.id, title: n.title || 'Untitled' }))
+            ))
+            break
+
           // Not yet implemented on the web side — see note above. Left
           // unanswered so any awaiting callback simply never fires, which
           // the editor already treats as "no data available".
-          case 'get_note_list':
           case 'on_task_toggle':
           case 'on_style_change':
           case 'request_delete_image':
