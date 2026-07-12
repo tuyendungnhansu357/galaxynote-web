@@ -21,12 +21,10 @@ import { useTagStore } from '../../stores/tagStore'
  *   editor's own toolbar (bold/italic/etc.), which already calls
  *   editorCmd.undo()/redo() directly. Duplicating that into a global menu
  *   would need lifting the active editor ref up through HomePage; deferred.
- * - Backlinks panel toggle: UI present, disabled — the panel itself
- *   (ui/backlinks_panel.py equivalent) isn't built yet.
  * - Light theme: toggle present, disabled — only the dark palette exists
  *   so far (src/index.css tokens).
  */
-export default function TopBar({ sidebarVisible, onToggleSidebar }) {
+export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisible, onToggleBacklinks }) {
   const navigate = useNavigate()
   const { createNote, getOrCreateDailyNote, setActiveNoteId } = useNoteStore()
   const { createTag } = useTagStore()
@@ -78,6 +76,7 @@ export default function TopBar({ sidebarVisible, onToggleSidebar }) {
           label="View"
           items={[
             { label: sidebarVisible ? 'Ẩn Sidebar' : 'Hiện Sidebar', shortcut: 'Ctrl+\\', onClick: onToggleSidebar },
+            { label: backlinksVisible ? 'Ẩn Backlinks' : 'Hiện Backlinks', onClick: onToggleBacklinks },
             { label: 'Galaxy 3D', shortcut: 'Ctrl+G', onClick: () => navigate('/graph') },
             { label: 'Giao diện sáng — sắp có', disabled: true },
           ]}
@@ -146,9 +145,10 @@ export default function TopBar({ sidebarVisible, onToggleSidebar }) {
           {sidebarVisible ? <PanelLeftClose size={13} /> : <PanelLeft size={13} />} Sidebar
         </button>
         <button
-          disabled
-          title="Backlinks panel — sắp có"
-          className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-mute opacity-50"
+          onClick={onToggleBacklinks}
+          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
+            backlinksVisible ? 'bg-panel-2 text-fg' : 'text-fg-dim hover:bg-panel-2'
+          }`}
         >
           <BookOpen size={13} /> Backlinks
         </button>
