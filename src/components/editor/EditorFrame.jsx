@@ -2,8 +2,10 @@ import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 
 import { useNoteStore } from '../../stores/noteStore'
 import { useTagStore } from '../../stores/tagStore'
 import { useAuthStore } from '../../stores/authStore'
+import { useLinkStore } from '../../stores/linkStore'
 import { supabase } from '../../lib/supabase'
 import { uploadImageBlob, dataUrlToBlob } from '../../lib/attachments'
+import { syncLinksFromContent } from '../../lib/links'
 
 // Same shape as the QSS "dark" theme desktop applies via editorCmd.applyTheme().
 const DARK_THEME = {
@@ -77,6 +79,9 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
     if (pending) {
       pendingSaveRef.current = null
       updateNote(pending.noteId, { content: pending.json })
+      syncLinksFromContent(pending.noteId, pending.json).then((changed) => {
+        if (changed) useLinkStore.getState().fetchLinks()
+      })
     }
   }, [updateNote])
 
