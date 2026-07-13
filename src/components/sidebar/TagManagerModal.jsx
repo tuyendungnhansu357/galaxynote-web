@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { X, Plus, Trash2, Orbit } from 'lucide-react'
+import { X, Plus, Trash2, Orbit, Combine } from 'lucide-react'
 import { useTagStore } from '../../stores/tagStore'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
@@ -14,11 +14,13 @@ const PRESET_COLORS = [
 ]
 
 export default function TagManagerModal({ onClose }) {
-  const { tags, relations, createTag, updateTag, deleteTag, addRelation, removeRelation } = useTagStore()
+  const { tags, relations, createTag, updateTag, deleteTag, addRelation, removeRelation, mergeTags } = useTagStore()
   const [selectedId, setSelectedId] = useState(tags[0]?.id ?? null)
   const [draft, setDraft] = useState(null) // local edit buffer, null = viewing selected as-is
   const [addParentId, setAddParentId] = useState('')
   const [addChildId, setAddChildId] = useState('')
+  const [mergeTargetId, setMergeTargetId] = useState('')
+  const [merging, setMerging] = useState(false)
 
   const selected = tags.find((t) => t.id === selectedId) ?? null
   const form = draft ?? selected
@@ -64,6 +66,19 @@ export default function TagManagerModal({ onClose }) {
     if (!confirm(`Xoá tag "${selected.name}"? Thao tác này sẽ gỡ tag khỏi mọi note.`)) return
     await deleteTag(selected.id)
     setSelectedId(tags.find((t) => t.id !== selected.id)?.id ?? null)
+  }
+
+  async function handleMerge() {
+    if (!selected || !mergeTargetId) return
+    const targetTag = tags.find((t) => t.id === mergeTargetId)
+    if (!confirm(`Gộp "${selected.name}" vào "${targetTag?.name}"? Mọi note/task đang gắn "${selected.name}" sẽ chuyển sang "${targetTag?.name}", và "${selected.name}" sẽ bị xoá. Không thể hoàn tác.`)) return
+    setMerging(true)
+    const ok = await mergeTags(selected.id, mergeTargetId)
+    setMerging(false)
+    if (ok) {
+      setMergeTargetId('')
+      setSelectedId(mergeTargetId)
+    }
   }
 
   const availableParents = tags.filter(
@@ -240,6 +255,37 @@ export default function TagManagerModal({ onClose }) {
                       </button>
                     </div>
                   )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-line-2 bg-bg p-3">
+                <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-fg-faint">
+                  <Combine size={13} /> Gộp tag này vào tag khác
+                </label>
+                <p className="mb-2 text-[11px] leading-relaxed text-fg-mute">
+                  Mọi note/task đang gắn <strong className="text-fg-dim">{form.name}</strong> sẽ chuyển sang tag đích,
+                  rồi <strong className="text-fg-dim">{form.name}</strong> bị xoá. Không thể hoàn tác.
+                </p>
+                <div className="flex gap-1.5">
+                  <select
+                    value={mergeTargetId}
+                    onChange={(e) => setMergeTargetId(e.target.value)}
+                    className="w-full rounded-md border border-line bg-panel px-2 py-1.5 text-xs text-fg-dim outline-none"
+                  >
+                    <option value="">+ Gộp vào tag…</option>
+                    {tags.filter((t) => t.id !== selectedId).map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                  <Button
+                    variant="danger"
+                    disabled={!mergeTargetId || merging}
+                    loading={merging}
+                    onClick={handleMerge}
+                    className="shrink-0"
+                  >
+                    Gộp
+                  </Button>
                 </div>
               </div>
             </div>

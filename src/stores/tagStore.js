@@ -164,4 +164,74 @@ export const useTagStore = create((set, get) => ({
       .eq('user_id', uid).eq('note_id', noteId).eq('tag_id', tagId).is('block_id', null)
     set({ noteTags: get().noteTags.filter((nt) => !(nt.note_id === noteId && nt.tag_id === tagId)) })
   },
+
+  // Web port of core/tag_manager.py::merge_tags() — moves every note_tags
+  // and tasks reference from sourceId over to targetId, then soft-deletes
+  // sourceId (tag + its relations).
+  //
+  // One thing desktop's raw-SQL bulk UPDATE glosses over: a note that
+  // already carries BOTH tags would end up with two note_tags rows sharing
+  // the same (note_id, tag_id) after the rename — a real unique-constraint
+  // conflict on Postgres. We check for that overlap up front and just
+  // soft-delete the source row for those notes instead of renaming it,
+  // since the note already has the target tag anyway.
+  mergeTags: async (sourceId, targetId) => {
+    const uid = userId()
+    if (!uid || sourceId === targetId) return false
+    const now = new Date().toISOString()
+
+    const [{ data: sourceRows }, { data: targetRows }] = await Promise.all([
+      supabase.from('note_tags').select('id,note_id').eq('user_id', uid).eq('tag_id', sourceId).eq('is_deleted', false),
+      supabase.from('note_tags').select('note_id').eq('user_id', uid).eq('tag_id', targetId).eq('is_deleted', false),
+    ])
+    const targetNoteIds = new Set((targetRows ?? []).map((r) => r.note_id))
+    const toRename = (sourceRows ?? []).filter((r) => !targetNoteIds.has(r.note_id))
+    const toDrop = (sourceRows ?? []).filter((r) => targetNoteIds.has(r.note_id))
+
+    const ops = []
+    if (toRename.length) {
+      ops.push(
+        supabase.from('note_tags')
+          .update({ tag_id: targetId, updated_at: now })
+          .in('id', toRename.map((r) => r.id))
+      )
+    }
+    if (toDrop.length) {
+      ops.push(
+        supabase.from('note_tags')
+          .update({ is_deleted: true, updated_at: now })
+          .in('id', toDrop.map((r) => r.id))
+      )
+    }
+    // Tasks have their own surrogate id, no composite-key conflict possible.
+    ops.push(
+      supabase.from('tasks')
+        .update({ tag_id: targetId, updated_at: now })
+        .eq('user_id', uid).eq('tag_id', sourceId)
+    )
+    ops.push(
+      supabase.from('tag_relations')
+        .update({ is_deleted: true, updated_at: now })
+        .eq('user_id', uid).or(`parent_id.eq.${sourceId},child_id.eq.${sourceId}`)
+    )
+    ops.push(
+      supabase.from('tags')
+        .update({ is_deleted: true, updated_at: now })
+        .eq('id', sourceId)
+    )
+
+    const results = await Promise.all(ops)
+    const failed = results.find((r) => r.error)
+    if (failed) { set({ error: failed.error.message }); return false }
+
+    set({
+      tags: get().tags.filter((t) => t.id !== sourceId),
+      relations: get().relations.filter((r) => r.parent_id !== sourceId && r.child_id !== sourceId),
+      noteTags: get().noteTags
+        .filter((nt) => !(nt.tag_id === sourceId && targetNoteIds.has(nt.note_id))) // dropped
+        .map((nt) => (nt.tag_id === sourceId ? { ...nt, tag_id: targetId } : nt)), // renamed
+      activeTagId: get().activeTagId === sourceId ? targetId : get().activeTagId,
+    })
+    return true
+  },
 }))
