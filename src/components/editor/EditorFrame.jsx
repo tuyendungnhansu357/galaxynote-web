@@ -79,6 +79,7 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
     if (pending) {
       pendingSaveRef.current = null
       updateNote(pending.noteId, { content: pending.json })
+      console.log(`[links] flushPendingSave → gọi syncLinksFromContent cho note ${pending.noteId.slice(0, 8)}…`)
       syncLinksFromContent(pending.noteId, pending.json).then((changed) => {
         if (changed) useLinkStore.getState().fetchLinks()
       })

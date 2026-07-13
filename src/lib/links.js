@@ -34,9 +34,13 @@ export function extractWikiLinkTargets(contentJson) {
  */
 export async function syncLinksFromContent(noteId, contentJson) {
   const uid = useAuthStore.getState().user?.id
-  if (!uid || !noteId) return false
+  if (!uid || !noteId) {
+    console.log('[links] syncLinksFromContent bỏ qua — thiếu uid hoặc noteId', { uid, noteId })
+    return false
+  }
 
   const targets = extractWikiLinkTargets(contentJson)
+  console.log(`[links] note ${noteId.slice(0, 8)}… — tìm thấy ${targets.size} wiki-link target(s) trong content:`, [...targets])
 
   const { data: existing, error } = await supabase
     .from('links')
@@ -45,11 +49,12 @@ export async function syncLinksFromContent(noteId, contentJson) {
     .eq('source_note_id', noteId)
     .eq('link_type', 'wiki')
     .eq('is_deleted', false)
-  if (error) { console.warn('[links] fetch existing failed:', error); return false }
+  if (error) { console.error('[links] fetch existing failed:', error); return false }
 
   const existingTargets = new Set((existing ?? []).map((l) => l.target_note_id))
   const toInsert = [...targets].filter((t) => !existingTargets.has(t))
   const toRemove = (existing ?? []).filter((l) => !targets.has(l.target_note_id))
+  console.log(`[links] existing=${existingTargets.size} toInsert=${toInsert.length} toRemove=${toRemove.length}`)
   if (!toInsert.length && !toRemove.length) return false
 
   const now = new Date().toISOString()
@@ -67,7 +72,8 @@ export async function syncLinksFromContent(noteId, contentJson) {
         is_deleted: false,
       }))
     )
-    if (insErr) console.warn('[links] insert failed:', insErr)
+    if (insErr) console.error('[links] insert failed:', insErr)
+    else console.log(`[links] đã insert ${toInsert.length} link row(s) thành công`)
   }
 
   if (toRemove.length) {
@@ -75,7 +81,7 @@ export async function syncLinksFromContent(noteId, contentJson) {
       .from('links')
       .update({ is_deleted: true, updated_at: now })
       .in('id', toRemove.map((l) => l.id))
-    if (delErr) console.warn('[links] soft-delete failed:', delErr)
+    if (delErr) console.error('[links] soft-delete failed:', delErr)
   }
 
   return true
