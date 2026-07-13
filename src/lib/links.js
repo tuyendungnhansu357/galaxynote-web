@@ -3,16 +3,46 @@ import { useAuthStore } from '../stores/authStore'
 
 // Wiki-links are inserted by editor_template.html as
 // `<a href="note://<id>" data-note-id="<id>" class="wiki-link">[[Title]]</a>`
-// — pulling the id straight out of the saved HTML is simpler and just as
-// reliable as re-parsing with a DOMParser, since we control that markup.
+// — this matches against the *unescaped* html of a single block. Running it
+// directly against the raw content JSON string doesn't work: that string is
+// itself JSON.stringify()'d, so every `"` inside the HTML comes through as
+// `\"`, and `data-note-id="` never matches `data-note-id=\"`.
 const WIKI_LINK_RE = /data-note-id="([^"]+)"/g
+
+function collectHtmlFields(blocks, out) {
+  for (const b of blocks ?? []) {
+    if (typeof b.html === 'string') out.push(b.html)
+    if (typeof b.title === 'string') out.push(b.title) // toggle title can contain a link too
+    if (Array.isArray(b.children)) collectHtmlFields(b.children, out)
+    if (Array.isArray(b.rows)) {
+      for (const row of b.rows) {
+        for (const cell of row ?? []) {
+          if (typeof cell?.html === 'string') out.push(cell.html)
+        }
+      }
+    }
+  }
+}
 
 export function extractWikiLinkTargets(contentJson) {
   const ids = new Set()
   if (!contentJson) return ids
-  WIKI_LINK_RE.lastIndex = 0
-  let m
-  while ((m = WIKI_LINK_RE.exec(contentJson))) ids.add(m[1])
+
+  let parsed
+  try {
+    parsed = JSON.parse(contentJson)
+  } catch {
+    return ids // not JSON (e.g. Page mode HTML) — nothing to scan yet
+  }
+
+  const htmlChunks = []
+  collectHtmlFields(parsed.blocks, htmlChunks)
+
+  for (const html of htmlChunks) {
+    WIKI_LINK_RE.lastIndex = 0
+    let m
+    while ((m = WIKI_LINK_RE.exec(html))) ids.add(m[1])
+  }
   return ids
 }
 
