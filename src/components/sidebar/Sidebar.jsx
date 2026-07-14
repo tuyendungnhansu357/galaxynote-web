@@ -1,7 +1,9 @@
-import { useState } from 'react'
-import { Plus, Search, LogOut, Settings2 } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Plus, Search, LogOut, Settings2, Info } from 'lucide-react'
 import { useNoteStore } from '../../stores/noteStore'
 import { useAuthStore } from '../../stores/authStore'
+import { useTagStore } from '../../stores/tagStore'
+import { parseSearchQuery, filterNotesByQuery } from '../../lib/searchQuery'
 import NoteList from './NoteList'
 import TagTree from './TagTree'
 import TagManagerModal from './TagManagerModal'
@@ -12,11 +14,16 @@ export default function Sidebar({ notes: notesProp, activeNoteId, onSelectNote, 
   const [tagManagerOpen, setTagManagerOpen] = useState(false)
   const { notes: allNotes, createNote } = useNoteStore()
   const { user, signOut } = useAuthStore()
+  const { tags, noteTags } = useTagStore()
+
+  const tagsByName = useMemo(
+    () => new Map(tags.map((t) => [t.name.toLowerCase(), t.id])),
+    [tags]
+  )
 
   const baseNotes = notesProp ?? allNotes
-  const filtered = query
-    ? baseNotes.filter((n) => (n.title || '').toLowerCase().includes(query.toLowerCase()))
-    : baseNotes
+  const filtered = filterNotesByQuery(baseNotes, query, noteTags, tagsByName)
+  const { hasUnsupportedDoneToken } = parseSearchQuery(query)
 
   async function handleNewNote() {
     const note = await createNote()
@@ -38,10 +45,16 @@ export default function Sidebar({ notes: notesProp, activeNoteId, onSelectNote, 
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm note…"
+            placeholder="Tìm note… (#tag, pinned:yes)"
+            title="Hỗ trợ: từ khoá thường, #tag (nhiều #tag = AND), pinned:yes/no"
             className="w-full bg-transparent text-sm text-fg outline-none placeholder:text-fg-mute"
           />
         </div>
+        {hasUnsupportedDoneToken && (
+          <p className="mt-1.5 flex items-center gap-1 text-[11px] text-dwarf">
+            <Info size={11} /> "done:" chưa hỗ trợ trên web — bỏ qua điều kiện đó.
+          </p>
+        )}
       </div>
 
       <div className="flex border-b border-line px-3 pt-2 text-sm">
