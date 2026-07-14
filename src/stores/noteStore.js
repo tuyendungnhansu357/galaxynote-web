@@ -6,6 +6,18 @@ function userId() {
   return useAuthStore.getState().user?.id
 }
 
+// Same order as the initial fetch's `.order()` chain — pinned first, then
+// most-recently-updated. Applied after every local mutation too (pin
+// toggle, content save, realtime upsert), not just on the initial load,
+// so the list re-sorts itself immediately instead of only looking right
+// after a refetch/refresh.
+function sortNotes(notes) {
+  return [...notes].sort((a, b) => {
+    if (!!b.is_pinned !== !!a.is_pinned) return (b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0)
+    return new Date(b.updated_at) - new Date(a.updated_at)
+  })
+}
+
 export const useNoteStore = create((set, get) => ({
   notes: [],
   activeNoteId: null,
@@ -46,7 +58,7 @@ export const useNoteStore = create((set, get) => ({
     }
     const { data, error } = await supabase.from('notes').insert(row).select().single()
     if (error) { set({ error: error.message }); return null }
-    set({ notes: [data, ...get().notes], activeNoteId: data.id })
+    set({ notes: sortNotes([data, ...get().notes]), activeNoteId: data.id })
     return data
   },
 
@@ -61,7 +73,7 @@ export const useNoteStore = create((set, get) => ({
       .select()
       .single()
     if (error) { set({ error: error.message }); return null }
-    set({ notes: get().notes.map((n) => (n.id === noteId ? data : n)) })
+    set({ notes: sortNotes(get().notes.map((n) => (n.id === noteId ? data : n))) })
     return data
   },
 
@@ -101,7 +113,7 @@ export const useNoteStore = create((set, get) => ({
       .maybeSingle()
     if (findError) { set({ error: findError.message }) }
     if (found) {
-      set({ notes: [found, ...get().notes.filter((n) => n.id !== found.id)] })
+      set({ notes: sortNotes([found, ...get().notes.filter((n) => n.id !== found.id)]) })
       return found
     }
 
@@ -122,7 +134,7 @@ export const useNoteStore = create((set, get) => ({
     }
     const { data, error } = await supabase.from('notes').insert(row).select().single()
     if (error) { set({ error: error.message }); return null }
-    set({ notes: [data, ...get().notes] })
+    set({ notes: sortNotes([data, ...get().notes]) })
     return data
   },
 
@@ -136,9 +148,11 @@ export const useNoteStore = create((set, get) => ({
     }
     const exists = get().notes.some((n) => n.id === row.id)
     set({
-      notes: exists
-        ? get().notes.map((n) => (n.id === row.id ? row : n))
-        : [row, ...get().notes],
+      notes: sortNotes(
+        exists
+          ? get().notes.map((n) => (n.id === row.id ? row : n))
+          : [row, ...get().notes]
+      ),
     })
   },
 }))
