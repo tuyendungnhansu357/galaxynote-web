@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Plus, Search, LogOut, Settings2 } from 'lucide-react'
+import { Plus, Search, LogOut, Settings2, Clock, Pin, CalendarDays, Orbit, Files } from 'lucide-react'
 import { useNoteStore } from '../../stores/noteStore'
 import { useAuthStore } from '../../stores/authStore'
 import { useTagStore } from '../../stores/tagStore'
@@ -10,8 +10,42 @@ import TagTree from './TagTree'
 import TagManagerModal from './TagManagerModal'
 import TaskListPanel from './TaskListPanel'
 
+const RECENT_LIMIT = 30 // matches desktop's note_manager.get_recent_notes() default
+
+const QUICK_FILTERS = [
+  { key: 'all', label: 'All Notes', icon: Files },
+  { key: 'recent', label: 'Recent', icon: Clock },
+  { key: 'pinned', label: 'Pinned', icon: Pin },
+  { key: 'daily', label: 'Daily', icon: CalendarDays },
+  { key: 'orphans', label: 'Orphans', icon: Orbit },
+]
+
+// Web port of core/note_manager.py's get_recent_notes / get_pinned_notes /
+// get_orphan_notes (no-tags-assigned) / daily-notes filter.
+function applyQuickFilter(notes, key, noteTags) {
+  switch (key) {
+    case 'recent':
+      return [...notes]
+        .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+        .slice(0, RECENT_LIMIT)
+    case 'pinned':
+      return notes.filter((n) => n.is_pinned)
+    case 'daily':
+      return notes
+        .filter((n) => n.content_mode === 'daily')
+        .sort((a, b) => (b.daily_date || '').localeCompare(a.daily_date || ''))
+    case 'orphans': {
+      const notesWithTags = new Set(noteTags.map((nt) => nt.note_id))
+      return notes.filter((n) => !notesWithTags.has(n.id))
+    }
+    default:
+      return notes
+  }
+}
+
 export default function Sidebar({ notes: notesProp, activeNoteId, onSelectNote, activeTagId, onFilterTag }) {
   const [tab, setTab] = useState('notes') // 'notes' | 'tags' | 'tasks'
+  const [quickFilter, setQuickFilter] = useState('all')
   const [query, setQuery] = useState('')
   const [tagManagerOpen, setTagManagerOpen] = useState(false)
   const { notes: allNotes, createNote } = useNoteStore()
@@ -25,7 +59,16 @@ export default function Sidebar({ notes: notesProp, activeNoteId, onSelectNote, 
   )
 
   const baseNotes = notesProp ?? allNotes
-  const filtered = filterNotesByQuery(baseNotes, query, noteTags, tagsByName, tasks)
+  const quickFiltered = useMemo(
+    () => applyQuickFilter(baseNotes, quickFilter, noteTags),
+    [baseNotes, quickFilter, noteTags]
+  )
+  const filtered = filterNotesByQuery(quickFiltered, query, noteTags, tagsByName, tasks)
+
+  function handleQuickFilter(key) {
+    setQuickFilter(key)
+    setTab('notes')
+  }
 
   async function handleNewNote() {
     const note = await createNote()
@@ -52,6 +95,21 @@ export default function Sidebar({ notes: notesProp, activeNoteId, onSelectNote, 
             className="w-full bg-transparent text-sm text-fg outline-none placeholder:text-fg-mute"
           />
         </div>
+      </div>
+
+      <div className="border-b border-line px-2 py-2">
+        {QUICK_FILTERS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => handleQuickFilter(key)}
+            className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition ${
+              tab === 'notes' && quickFilter === key ? 'bg-panel-2 text-fg' : 'text-fg-dim hover:bg-panel-2/60'
+            }`}
+          >
+            <Icon size={13} className="shrink-0 text-fg-mute" />
+            {label}
+          </button>
+        ))}
       </div>
 
       <div className="flex border-b border-line px-3 pt-2 text-sm">
