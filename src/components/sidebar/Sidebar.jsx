@@ -8,9 +8,10 @@ import { filterNotesByQuery } from '../../lib/searchQuery'
 import NoteList from './NoteList'
 import TagTree from './TagTree'
 import TagManagerModal from './TagManagerModal'
+import TaskListPanel from './TaskListPanel'
 
 export default function Sidebar({ notes: notesProp, activeNoteId, onSelectNote, activeTagId, onFilterTag }) {
-  const [tab, setTab] = useState('notes') // 'notes' | 'tags'
+  const [tab, setTab] = useState('notes') // 'notes' | 'tags' | 'tasks'
   const [query, setQuery] = useState('')
   const [tagManagerOpen, setTagManagerOpen] = useState(false)
   const { notes: allNotes, createNote } = useNoteStore()
@@ -54,7 +55,7 @@ export default function Sidebar({ notes: notesProp, activeNoteId, onSelectNote, 
       </div>
 
       <div className="flex border-b border-line px-3 pt-2 text-sm">
-        {['notes', 'tags'].map((t) => (
+        {['notes', 'tags', 'tasks'].map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -62,17 +63,15 @@ export default function Sidebar({ notes: notesProp, activeNoteId, onSelectNote, 
               tab === t ? 'border-star text-fg' : 'border-transparent text-fg-mute hover:text-fg-faint'
             }`}
           >
-            {t === 'notes' ? 'Notes' : 'Tags'}
+            {t === 'notes' ? 'Notes' : t === 'tags' ? 'Tags' : 'Tasks'}
           </button>
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto py-2">
-        {tab === 'notes' ? (
-          <NoteList notes={filtered} activeNoteId={activeNoteId} onSelect={onSelectNote} />
-        ) : (
-          <TagTree activeTagId={activeTagId} onFilterTag={onFilterTag} />
-        )}
+      <div className={tab === 'tasks' ? 'flex-1 overflow-hidden' : 'flex-1 overflow-y-auto py-2'}>
+        {tab === 'notes' && <NoteList notes={filtered} activeNoteId={activeNoteId} onSelect={onSelectNote} />}
+        {tab === 'tags' && <TagTree activeTagId={activeTagId} onFilterTag={onFilterTag} />}
+        {tab === 'tasks' && <TaskListPanel onSelectNote={onSelectNote} />}
       </div>
 
       {tab === 'notes' && (
