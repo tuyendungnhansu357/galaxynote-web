@@ -42,6 +42,7 @@ export default function HomePage() {
           onToggleSidebar={() => setSidebarVisible((v) => !v)}
           backlinksVisible={backlinksVisible}
           onToggleBacklinks={() => setBacklinksVisible((v) => !v)}
+          activeNote={activeNote}
         />
         <NoteEditorWidget note={activeNote} key={activeNote?.id ?? 'none'} />
       </main>

@@ -10,6 +10,7 @@ import ImportMdModal from './ImportMdModal'
 import TagManagerModal from '../sidebar/TagManagerModal'
 import { useNoteStore } from '../../stores/noteStore'
 import { useTagStore } from '../../stores/tagStore'
+import { downloadNoteAsMarkdown, downloadNoteAsHtml } from '../../lib/export'
 
 /**
  * Web port of the desktop menu bar + top toolbar (SPEC §10.1: File / Edit /
@@ -24,7 +25,7 @@ import { useTagStore } from '../../stores/tagStore'
  * - Light theme: toggle present, disabled — only the dark palette exists
  *   so far (src/index.css tokens).
  */
-export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisible, onToggleBacklinks }) {
+export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisible, onToggleBacklinks, activeNote }) {
   const navigate = useNavigate()
   const { createNote, getOrCreateDailyNote, setActiveNoteId } = useNoteStore()
   const { createTag } = useTagStore()
@@ -64,6 +65,9 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
             null,
             { label: 'Import URL…', onClick: () => setImportUrlOpen(true) },
             { label: 'Import Markdown…', onClick: () => setImportMdOpen(true) },
+            null,
+            { label: 'Export Markdown (.md)', disabled: !activeNote, onClick: () => downloadNoteAsMarkdown(activeNote) },
+            { label: 'Export HTML (.html)', disabled: !activeNote, onClick: () => downloadNoteAsHtml(activeNote) },
           ]}
         />
         <MenuDropdown
