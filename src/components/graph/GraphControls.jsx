@@ -20,11 +20,18 @@ const DEFAULT_SETTINGS = {
   showLabels: true,
   showArrows: false,
   showParticles: true,
+  labelScale: 1.0,
+  descFontsize: 11,
   nodeSizeScale: 1.0,
+  linkWidthScale: 1.0,
   linkOpacity: 0.6,
+  particleSpeed: 0.004,
+  particleSize: 2.5,
   charge: -200,
   chargeSpace: -450,
   linkDistance: 110,
+  centerForce: 0.05,
+  velocityDecay: 0.35,
   physicsEnabled: true,
 }
 
@@ -144,8 +151,13 @@ export default function GraphControls({ settings, onChange, onReheat, searchQuer
             <Row label="Labels" checked={settings.showLabels} onChange={(v) => set({ showLabels: v })} />
             <Row label="Mũi tên" checked={settings.showArrows} onChange={(v) => set({ showArrows: v })} />
             <Row label="Particles" checked={settings.showParticles} onChange={(v) => set({ showParticles: v })} />
+            <SliderRow label="Cỡ chữ label" unit="×" value={settings.labelScale} min={0.3} max={3.0} step={0.1} onChange={(v) => set({ labelScale: v })} />
+            <SliderRow label="Cỡ chữ mô tả" unit="px" value={settings.descFontsize} min={9} max={18} step={1} onChange={(v) => set({ descFontsize: v })} />
             <SliderRow label="Kích thước nút" unit="×" value={settings.nodeSizeScale} min={0.3} max={3.0} step={0.1} onChange={(v) => set({ nodeSizeScale: v })} />
+            <SliderRow label="Độ dày link" unit="×" value={settings.linkWidthScale ?? 1.0} min={0.2} max={4.0} step={0.2} onChange={(v) => set({ linkWidthScale: v })} />
             <SliderRow label="Opacity link" value={settings.linkOpacity} min={0.05} max={1.0} step={0.05} onChange={(v) => set({ linkOpacity: v })} />
+            <SliderRow label="Tốc độ hạt" value={settings.particleSpeed} min={0.001} max={0.03} step={0.001} onChange={(v) => set({ particleSpeed: v })} />
+            <SliderRow label="Cỡ hạt" value={settings.particleSize} min={0.5} max={6} step={0.5} onChange={(v) => set({ particleSize: v })} />
             <button
               onClick={() => set({ physicsEnabled: !settings.physicsEnabled })}
               className="mt-1 w-full rounded-md bg-[#3b5fc0] py-1.5 text-xs font-semibold text-white transition hover:bg-star"
@@ -158,6 +170,8 @@ export default function GraphControls({ settings, onChange, onReheat, searchQuer
             <SliderRow label="Lực đẩy" value={settings.charge} min={-800} max={-20} step={10} onChange={(v) => set({ charge: v })} />
             <SliderRow label="Lực đẩy Space" value={settings.chargeSpace} min={-1200} max={-50} step={25} onChange={(v) => set({ chargeSpace: v })} />
             <SliderRow label="Khoảng cách link" value={settings.linkDistance} min={20} max={400} step={10} onChange={(v) => set({ linkDistance: v })} />
+            <SliderRow label="Lực tâm" value={settings.centerForce} min={0} max={0.5} step={0.01} onChange={(v) => set({ centerForce: v })} />
+            <SliderRow label="Velocity decay" value={settings.velocityDecay} min={0.1} max={0.9} step={0.05} onChange={(v) => set({ velocityDecay: v })} />
             <button
               onClick={onReheat}
               className="mt-1 w-full rounded-md bg-[#1e3060] py-1.5 text-xs font-semibold text-white transition hover:bg-[#2a5090]"

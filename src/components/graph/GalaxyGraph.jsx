@@ -69,8 +69,6 @@ const GalaxyGraph = forwardRef(function GalaxyGraph({ graphData, onNodeClick, se
         return (n.is_space ? '🪐 ' : '🏷 ') + (n.name || n.id) + cnt
       })
       .linkDirectionalArrowRelPos(1)
-      .linkDirectionalParticleWidth(2)
-      .linkDirectionalParticleSpeed(0.005)
       .onNodeHover((n) => { containerRef.current.style.cursor = n ? 'pointer' : 'default' })
       .onNodeClick((n) => {
         onNodeClick?.(n)
@@ -78,7 +76,6 @@ const GalaxyGraph = forwardRef(function GalaxyGraph({ graphData, onNodeClick, se
         graph.cameraPosition({ x: (n.x || 0) * d, y: (n.y || 0) * d, z: (n.z || 0) * d }, n, 1200)
       })
       .d3AlphaDecay(0.018)
-      .d3VelocityDecay(0.35)
       .width(containerRef.current.clientWidth)
       .height(containerRef.current.clientHeight)
 
@@ -113,7 +110,11 @@ const GalaxyGraph = forwardRef(function GalaxyGraph({ graphData, onNodeClick, se
         return base
       }).strength((l) => (l.kind === 'note' ? 0.3 : l.kind === 'backlink' ? 0.5 : 0.8))
     } catch { /* noop */ }
-  }, [settings.charge, settings.chargeSpace, settings.linkDistance])
+    try {
+      graph.d3Force('center')?.strength(settings.centerForce)
+    } catch { /* noop */ }
+    graph.d3VelocityDecay(settings.velocityDecay)
+  }, [settings.charge, settings.chargeSpace, settings.linkDistance, settings.centerForce, settings.velocityDecay])
 
   useEffect(() => {
     const graph = graphRef.current
@@ -132,10 +133,12 @@ const GalaxyGraph = forwardRef(function GalaxyGraph({ graphData, onNodeClick, se
     const dim = highlightNodeIds && highlightNodeIds.size > 0 ? highlightNodeIds : null
     const showLabels = settings.showLabels
     const sizeScale = settings.nodeSizeScale
+    const labelScale = settings.labelScale
+    const descFontsize = settings.descFontsize
 
     function makeGlowSprite(n) {
       const dimmed = dim && !dim.has(n.id)
-      const key = `${n.id}_${n.val || 3}_${showLabels}_${dimmed}_${sizeScale}`
+      const key = `${n.id}_${n.val || 3}_${showLabels}_${dimmed}_${sizeScale}_${labelScale}_${descFontsize}`
       const cache = spriteCacheRef.current
       if (cache.has(key)) return cache.get(key)
 
@@ -143,8 +146,10 @@ const GalaxyGraph = forwardRef(function GalaxyGraph({ graphData, onNodeClick, se
       const col = isN ? (n.in_links > 0 ? '#3a9090' : '#1e3a4a') : (n.color || '#4f8ef7')
       const r = Math.max(6, Math.sqrt(Math.max(1, n.val || 3)) * 14 * sizeScale)
       const gr = n.is_space ? r * 3.2 : r * 2.2
-      const SIZE = Math.ceil(gr * 2 + 4)
-      const cx = SIZE / 2, cy = SIZE / 2
+      const hasDesc = showLabels && !isN && !!n.description
+      const extraH = hasDesc ? descFontsize + 6 : 0
+      const SIZE = Math.ceil(gr * 2 + 4 + extraH)
+      const cx = SIZE / 2, cy = (SIZE - extraH) / 2
       const fade = dimmed ? 0.15 : 1
 
       const canvas = document.createElement('canvas')
@@ -185,12 +190,17 @@ const GalaxyGraph = forwardRef(function GalaxyGraph({ graphData, onNodeClick, se
 
       if (showLabels) {
         const lbl = (n.icon ? n.icon + ' ' : '') + (n.name || n.id)
-        const fs = n.is_space ? 18 : 13
+        const fs = Math.round((n.is_space ? 18 : 13) * labelScale)
         ctx.font = (n.is_space ? 'bold ' : '') + fs + 'px "Segoe UI",Arial,sans-serif'
         ctx.textAlign = 'center'; ctx.textBaseline = 'top'
         ctx.shadowColor = '#05080f'; ctx.shadowBlur = 5
         ctx.fillStyle = isN ? '#5577aa' : ca(col, 1)
         ctx.fillText(lbl, cx, cy + r + 3)
+        if (hasDesc) {
+          ctx.font = descFontsize + 'px "Segoe UI",Arial,sans-serif'
+          ctx.fillStyle = ca(col, 0.65)
+          ctx.fillText('📌 ' + n.description, cx, cy + r + fs + 6)
+        }
         ctx.shadowBlur = 0
       }
 
@@ -211,7 +221,10 @@ const GalaxyGraph = forwardRef(function GalaxyGraph({ graphData, onNodeClick, se
         if (l.kind === 'backlink') return 'rgba(255,165,60,0.75)'
         return 'rgba(128,128,128,0.06)'
       })
-      .linkWidth((l) => (l.kind === 'relation' ? 1.5 : l.kind === 'backlink' ? 1.0 : 0.8))
+      .linkWidth((l) => {
+        const lw = settings.linkWidthScale ?? 1.0
+        return l.kind === 'relation' ? 2.5 * lw : l.kind === 'cooccurrence' ? 1.2 * lw : l.kind === 'backlink' ? 1.0 * lw : 0.4 * lw
+      })
       .linkOpacity(settings.linkOpacity)
       .linkDirectionalArrowLength(settings.showArrows ? 4 : 0)
       .linkDirectionalParticles((l) => {
@@ -219,8 +232,15 @@ const GalaxyGraph = forwardRef(function GalaxyGraph({ graphData, onNodeClick, se
         return l.kind === 'backlink' ? 2 : l.kind === 'relation' ? 3 : 0
       })
       .linkDirectionalParticleColor((l) => (l.kind === 'backlink' ? '#ffb050' : linkColorFor(l, colorByNodeId, 0.9)))
+      .linkDirectionalParticleWidth(settings.particleSize)
+      .linkDirectionalParticleSpeed(settings.particleSpeed)
       .graphData(graphData)
-  }, [graphData, settings.showLabels, settings.showParticles, settings.showArrows, settings.linkOpacity, settings.nodeSizeScale, highlightNodeIds])
+  }, [
+    graphData, settings.showLabels, settings.showParticles, settings.showArrows,
+    settings.linkOpacity, settings.linkWidthScale, settings.nodeSizeScale,
+    settings.labelScale, settings.descFontsize, settings.particleSpeed, settings.particleSize,
+    highlightNodeIds,
+  ])
 
   useEffect(() => {
     const graph = graphRef.current
