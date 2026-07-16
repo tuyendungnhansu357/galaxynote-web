@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import ForceGraph3D from '3d-force-graph'
 import * as THREE from 'three'
 
@@ -28,17 +28,30 @@ function linkColorFor(l, colorByNodeId, alpha) {
 }
 
 /**
- * @param graphData    { nodes, links }
- * @param onNodeClick
- * @param showLabels   toggled from GraphControls
- * @param autoRotate   toggled from GraphControls (desktop calls this "physics"/orbit)
- * @param showParticles
- * @param highlightNodeIds   Set<string> of node ids to keep at full opacity (tag filter) — everything else fades. null/empty = show all normally
+ * @param graphData          { nodes, links } — already pre-filtered by GraphPage
+ *                           per settings.showTags/showNotes/orphansOnly/spacesOnly
+ * @param settings           see GraphControls.DEFAULT_SETTINGS
+ * @param highlightNodeIds   Set<string> of node ids to keep at full opacity
+ *                           (tag filter / search) — everything else fades
  */
-export default function GalaxyGraph({ graphData, onNodeClick, showLabels = true, autoRotate = true, showParticles = true, physicsEnabled = true, highlightNodeIds = null }) {
+const GalaxyGraph = forwardRef(function GalaxyGraph({ graphData, onNodeClick, settings, highlightNodeIds = null }, ref) {
   const containerRef = useRef(null)
   const graphRef = useRef(null)
   const spriteCacheRef = useRef(new Map())
+
+  useImperativeHandle(ref, () => ({
+    reheat() {
+      const g = graphRef.current
+      if (!g) return
+      g.d3ReheatSimulation?.()
+    },
+    focusNode(node) {
+      const g = graphRef.current
+      if (!g || !node) return
+      const d = 1 + 150 / Math.hypot(node.x || 1, node.y || 1, node.z || 1)
+      g.cameraPosition({ x: (node.x || 0) * d, y: (node.y || 0) * d, z: (node.z || 0) * d }, node, 1200)
+    },
+  }), [])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -69,18 +82,6 @@ export default function GalaxyGraph({ graphData, onNodeClick, showLabels = true,
       .width(containerRef.current.clientWidth)
       .height(containerRef.current.clientHeight)
 
-    try { graph.d3Force('charge').strength((n) => (n.is_space ? -450 : n.type === 'note' ? -30 : -200)) } catch { /* noop */ }
-    try {
-      graph.d3Force('link')
-        .distance((l) => (l.kind === 'relation' ? 100 : l.kind === 'note' ? 50 : l.kind === 'backlink' ? 130 : 200))
-        .strength((l) => (l.kind === 'note' ? 0.3 : l.kind === 'backlink' ? 0.5 : 0.8))
-    } catch { /* noop */ }
-
-    if (graph.controls()) {
-      graph.controls().autoRotate = autoRotate
-      graph.controls().autoRotateSpeed = 0.4
-    }
-
     graphRef.current = graph
     const onResize = () => {
       if (!containerRef.current) return
@@ -96,9 +97,32 @@ export default function GalaxyGraph({ graphData, onNodeClick, showLabels = true,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Forces re-applied whenever the relevant sliders change.
+  useEffect(() => {
+    const graph = graphRef.current
+    if (!graph) return
+    try {
+      graph.d3Force('charge').strength((n) => (n.is_space ? settings.chargeSpace : n.type === 'note' ? settings.charge * 0.15 : settings.charge))
+    } catch { /* noop */ }
+    try {
+      graph.d3Force('link').distance((l) => {
+        const base = l.kind === 'relation' ? settings.linkDistance * 0.9
+          : l.kind === 'note' ? settings.linkDistance * 0.45
+          : l.kind === 'backlink' ? settings.linkDistance * 1.2
+          : settings.linkDistance * 1.8
+        return base
+      }).strength((l) => (l.kind === 'note' ? 0.3 : l.kind === 'backlink' ? 0.5 : 0.8))
+    } catch { /* noop */ }
+  }, [settings.charge, settings.chargeSpace, settings.linkDistance])
+
+  useEffect(() => {
+    const graph = graphRef.current
+    if (graph?.controls()) graph.controls().autoRotate = false // desktop's browser export auto-rotates; the in-app panel doesn't expose this toggle, so keep it off to match
+  }, [])
+
   // Re-apply data + node/link styling whenever data or toggles change —
-  // sprites are cached per (id,val,showLabels) so toggling labels rebuilds
-  // just the sprites, not the whole graph/physics simulation.
+  // sprites are cached per (id,val,showLabels,dimmed) so toggling labels
+  // rebuilds just the sprites, not the whole graph/physics simulation.
   useEffect(() => {
     const graph = graphRef.current
     if (!graph || !graphData) return
@@ -106,16 +130,18 @@ export default function GalaxyGraph({ graphData, onNodeClick, showLabels = true,
     const colorByNodeId = {}
     for (const n of graphData.nodes) colorByNodeId[n.id] = n.color || '#4f8ef7'
     const dim = highlightNodeIds && highlightNodeIds.size > 0 ? highlightNodeIds : null
+    const showLabels = settings.showLabels
+    const sizeScale = settings.nodeSizeScale
 
     function makeGlowSprite(n) {
       const dimmed = dim && !dim.has(n.id)
-      const key = `${n.id}_${n.val || 3}_${showLabels}_${dimmed}`
+      const key = `${n.id}_${n.val || 3}_${showLabels}_${dimmed}_${sizeScale}`
       const cache = spriteCacheRef.current
       if (cache.has(key)) return cache.get(key)
 
       const isN = n.type === 'note'
       const col = isN ? (n.in_links > 0 ? '#3a9090' : '#1e3a4a') : (n.color || '#4f8ef7')
-      const r = Math.max(6, Math.sqrt(Math.max(1, n.val || 3)) * 14)
+      const r = Math.max(6, Math.sqrt(Math.max(1, n.val || 3)) * 14 * sizeScale)
       const gr = n.is_space ? r * 3.2 : r * 2.2
       const SIZE = Math.ceil(gr * 2 + 4)
       const cx = SIZE / 2, cy = SIZE / 2
@@ -186,23 +212,24 @@ export default function GalaxyGraph({ graphData, onNodeClick, showLabels = true,
         return 'rgba(128,128,128,0.06)'
       })
       .linkWidth((l) => (l.kind === 'relation' ? 1.5 : l.kind === 'backlink' ? 1.0 : 0.8))
-      .linkOpacity(0.6)
+      .linkOpacity(settings.linkOpacity)
+      .linkDirectionalArrowLength(settings.showArrows ? 4 : 0)
       .linkDirectionalParticles((l) => {
-        if (!showParticles) return 0
+        if (!settings.showParticles) return 0
         return l.kind === 'backlink' ? 2 : l.kind === 'relation' ? 3 : 0
       })
       .linkDirectionalParticleColor((l) => (l.kind === 'backlink' ? '#ffb050' : linkColorFor(l, colorByNodeId, 0.9)))
       .graphData(graphData)
-
-    if (graph.controls()) graph.controls().autoRotate = autoRotate
-  }, [graphData, showLabels, showParticles, highlightNodeIds, autoRotate])
+  }, [graphData, settings.showLabels, settings.showParticles, settings.showArrows, settings.linkOpacity, settings.nodeSizeScale, highlightNodeIds])
 
   useEffect(() => {
     const graph = graphRef.current
     if (!graph) return
-    if (physicsEnabled) graph.resumeAnimation?.()
+    if (settings.physicsEnabled) graph.resumeAnimation?.()
     else graph.pauseAnimation?.()
-  }, [physicsEnabled])
+  }, [settings.physicsEnabled])
 
   return <div ref={containerRef} className="h-full w-full" />
-}
+})
+
+export default GalaxyGraph

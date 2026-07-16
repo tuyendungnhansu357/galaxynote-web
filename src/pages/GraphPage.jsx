@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { useNotes } from '../hooks/useNotes'
@@ -6,28 +6,45 @@ import { useTags } from '../hooks/useTags'
 import { useLinks } from '../hooks/useLinks'
 import { buildTagGraph } from '../lib/graphBuilder'
 import GalaxyGraph from '../components/graph/GalaxyGraph'
-import GraphControls from '../components/graph/GraphControls'
+import GraphControls, { DEFAULT_SETTINGS } from '../components/graph/GraphControls'
 
 export default function GraphPage() {
   const navigate = useNavigate()
   const { notes } = useNotes()
   const { tags, relations, noteTags } = useTags()
   const { links } = useLinks()
+  const graphRef = useRef(null)
 
-  const [showLabels, setShowLabels] = useState(true)
-  const [physicsEnabled, setPhysicsEnabled] = useState(true)
-  const [autoRotate, setAutoRotate] = useState(true)
-  const [showParticles, setShowParticles] = useState(true)
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const [filterTagId, setFilterTagId] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
-  const graphData = useMemo(
+  const fullGraphData = useMemo(
     () => buildTagGraph({ tags, relations, noteTags, notes: notes.slice(0, 200), links }),
     [tags, relations, noteTags, notes, links]
   )
 
-  // "Filter by tag" (SPEC §10.7): highlight the chosen tag, its directly
-  // related tags, and the notes carrying it — fade everything else.
-  const highlightNodeIds = useMemo(() => {
+  // "Bộ lọc" section: show/hide tags or notes wholesale, or narrow down to
+  // just orphan notes / just Space-root tags — matches ui/graph_3d_view.py's
+  // f-tags / f-notes / f-orphans / f-spaces checkboxes exactly.
+  const graphData = useMemo(() => {
+    let nodes = fullGraphData.nodes
+    if (!settings.showTags) nodes = nodes.filter((n) => n.type !== 'tag')
+    if (!settings.showNotes) nodes = nodes.filter((n) => n.type !== 'note')
+    if (settings.orphansOnly) nodes = nodes.filter((n) => n.type !== 'note' || n.is_orphan)
+    if (settings.spacesOnly) nodes = nodes.filter((n) => n.type !== 'tag' || n.is_space)
+
+    const keepIds = new Set(nodes.map((n) => n.id))
+    const links = fullGraphData.links.filter((l) => {
+      const s = l.source?.id || l.source, t = l.target?.id || l.target
+      return keepIds.has(s) && keepIds.has(t)
+    })
+    return { nodes, links }
+  }, [fullGraphData, settings.showTags, settings.showNotes, settings.orphansOnly, settings.spacesOnly])
+
+  // "Filter by tag" via clicking a node stays available too (SPEC §10.7):
+  // highlight the chosen tag, its directly related tags, and its notes.
+  const tagHighlight = useMemo(() => {
     if (!filterTagId) return null
     const ids = new Set([`t_${filterTagId}`])
     for (const r of relations) {
@@ -40,8 +57,25 @@ export default function GraphPage() {
     return ids
   }, [filterTagId, relations, noteTags])
 
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return []
+    return graphData.nodes.filter((n) => (n.name || '').toLowerCase().includes(q)).slice(0, 8)
+  }, [searchQuery, graphData])
+
+  const highlightNodeIds = useMemo(() => {
+    if (searchResults.length && searchQuery.trim()) return new Set(searchResults.map((n) => n.id))
+    return tagHighlight
+  }, [searchResults, searchQuery, tagHighlight])
+
   function handleNodeClick(node) {
     if (node.type === 'note') navigate('/', { state: { openNoteId: node.raw_id } })
+    else if (node.type === 'tag') setFilterTagId(node.raw_id === filterTagId ? null : node.raw_id)
+  }
+
+  function handleSearchPick(node) {
+    graphRef.current?.focusNode(node)
+    setSearchQuery('')
   }
 
   return (
@@ -72,26 +106,20 @@ export default function GraphPage() {
       ) : (
         <>
           <GalaxyGraph
+            ref={graphRef}
             graphData={graphData}
             onNodeClick={handleNodeClick}
-            showLabels={showLabels}
-            physicsEnabled={physicsEnabled}
-            autoRotate={autoRotate}
-            showParticles={showParticles}
+            settings={settings}
             highlightNodeIds={highlightNodeIds}
           />
           <GraphControls
-            tags={tags}
-            filterTagId={filterTagId}
-            onFilterTagChange={setFilterTagId}
-            showLabels={showLabels}
-            onToggleLabels={setShowLabels}
-            physicsEnabled={physicsEnabled}
-            onTogglePhysics={setPhysicsEnabled}
-            autoRotate={autoRotate}
-            onToggleAutoRotate={setAutoRotate}
-            showParticles={showParticles}
-            onToggleParticles={setShowParticles}
+            settings={settings}
+            onChange={setSettings}
+            onReheat={() => graphRef.current?.reheat()}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchResults={searchResults}
+            onSearchPick={handleSearchPick}
           />
           <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-line-2 bg-panel/90 px-5 py-1.5 text-xs text-fg-faint backdrop-blur">
             Click node để khám phá · Kéo để xoay · Scroll để zoom
