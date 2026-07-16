@@ -143,6 +143,7 @@ export function buildTagGraph({ tags, relations, noteTags, notes, links }) {
       type: 'note',
       raw_id: note.id,
       is_orphan: tagIds.length === 0,
+      in_links: inL,
       note_count: 0,
     })
     if (tagIds.length) {
