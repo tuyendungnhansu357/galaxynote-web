@@ -88,20 +88,25 @@ export default function GraphControls({ settings, onChange, onReheat, searchQuer
 
   return (
     <>
-      <button
-        onClick={() => setPanelOpen((v) => !v)}
-        title="Mở / đóng bộ điều khiển"
-        className="absolute right-0 top-1/2 z-20 -translate-y-1/2 rounded-l-md border border-r-0 border-line bg-panel/90 px-1.5 py-2.5 text-[11px] tracking-widest text-fg-faint backdrop-blur transition hover:text-fg"
-        style={{ writingMode: 'vertical-lr' }}
-      >
-        ⚙ Điều khiển
-      </button>
-
+      {/* Button + panel now live in ONE translating container, button
+          attached to the panel's left edge — so when the panel slides
+          out, the button slides out with it (and stays flush against the
+          screen edge when collapsed), instead of staying pinned in place. */}
       <div
-        className={`absolute right-0 top-0 z-10 h-full w-64 border-l border-line bg-panel/95 backdrop-blur transition-transform duration-200 ${
-          panelOpen ? 'translate-x-0' : 'translate-x-full'
+        className={`absolute right-0 top-0 z-10 flex h-full items-stretch transition-transform duration-200 ${
+          panelOpen ? 'translate-x-0' : 'translate-x-64'
         }`}
       >
+        <button
+          onClick={() => setPanelOpen((v) => !v)}
+          title="Mở / đóng bộ điều khiển"
+          className="my-auto shrink-0 rounded-l-md border border-r-0 border-line bg-panel/90 px-1.5 py-2.5 text-[11px] tracking-widest text-fg-faint backdrop-blur transition hover:text-fg"
+          style={{ writingMode: 'vertical-lr' }}
+        >
+          ⚙ Điều khiển
+        </button>
+
+        <div className="h-full w-64 border-l border-line bg-panel/95 backdrop-blur">
         <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
           <span className="text-xs font-semibold text-fg">Bộ điều khiển</span>
           <button
@@ -179,6 +184,7 @@ export default function GraphControls({ settings, onChange, onReheat, searchQuer
               🔥 Kích hoạt lại
             </button>
           </Section>
+        </div>
         </div>
       </div>
     </>
