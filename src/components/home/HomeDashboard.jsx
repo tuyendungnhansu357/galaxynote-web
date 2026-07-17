@@ -1,22 +1,18 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Orbit } from 'lucide-react'
-import { useAuthStore } from '../../stores/authStore'
+import { useHomeSettingsStore } from '../../stores/homeSettingsStore'
+import AnalogClock from './AnalogClock'
 
 // Web port of ui/home_page.py — full-area greeting/clock dashboard shown
-// when there is no active note (matches desktop's HomePage exactly:
-// greeting, big digital clock, Vietnamese date, random quote, Galaxy button).
+// when there is no active note. Name / clock style / quotes are NOT
+// hardcoded — they come from useHomeSettingsStore (localStorage), same
+// idea as desktop's config.get("home_user_name" / "home_clock_style" /
+// "home_quotes"). Edit them via TopBar → Edit → "⚙️ Cài đặt…".
 
 const DAYS_VI = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
 const MONTHS_VI = [
   '', 'tháng 1', 'tháng 2', 'tháng 3', 'tháng 4', 'tháng 5', 'tháng 6',
   'tháng 7', 'tháng 8', 'tháng 9', 'tháng 10', 'tháng 11', 'tháng 12',
-]
-
-const QUOTES = [
-  'Ghi lại để nhớ, kết nối để hiểu.',
-  'Kiến thức chỉ có giá trị khi được kết nối.',
-  'Mỗi note là một vệ tinh, mỗi ý tưởng là một hành tinh.',
-  'Đừng chỉ lưu trữ — hãy khám phá.',
 ]
 
 function greet(hour) {
@@ -26,11 +22,14 @@ function greet(hour) {
 }
 
 export default function HomeDashboard({ onOpenGalaxy }) {
-  const user = useAuthStore((s) => s.user)
-  const name = useMemo(() => {
-    const raw = user?.email?.split('@')[0] || 'Bạn'
-    return raw.charAt(0).toUpperCase() + raw.slice(1)
-  }, [user])
+  const { userName, clockStyle, currentQuote, pickQuote } = useHomeSettingsStore()
+
+  // Pick a fresh quote each time the dashboard mounts (matches
+  // home_page.py's _pick_quote() being called from __init__).
+  useEffect(() => {
+    pickQuote()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [now, setNow] = useState(new Date())
   useEffect(() => {
@@ -38,29 +37,35 @@ export default function HomeDashboard({ onOpenGalaxy }) {
     return () => clearInterval(t)
   }, [])
 
-  const quote = useMemo(() => QUOTES[Math.floor(Math.random() * QUOTES.length)], [])
-
   const dateStr = `${DAYS_VI[now.getDay()]}, ngày ${now.getDate()} ${MONTHS_VI[now.getMonth() + 1]} năm ${now.getFullYear()}`
   const timeStr = now.toLocaleTimeString('vi-VN', { hour12: false })
 
   return (
     <div className="flex h-full flex-1 flex-col items-center justify-center bg-panel px-20">
       <p className="text-2xl text-fg-faint">
-        {greet(now.getHours())}, {name}
+        {greet(now.getHours())}, {userName}
       </p>
 
-      <p
-        className="mt-4 font-display font-bold text-fg tabular-nums"
-        style={{ fontSize: 'clamp(56px, 9vw, 128px)', letterSpacing: '-4px', lineHeight: 1 }}
-      >
-        {timeStr}
-      </p>
+      <div className="mt-4">
+        {clockStyle === 'round' ? (
+          <AnalogClock now={now} />
+        ) : (
+          <p
+            className="font-display font-bold text-fg tabular-nums"
+            style={{ fontSize: 'clamp(56px, 9vw, 128px)', letterSpacing: '-4px', lineHeight: 1 }}
+          >
+            {timeStr}
+          </p>
+        )}
+      </div>
 
       <p className="mt-3 text-xl text-star">{dateStr}</p>
 
-      <p className="mt-11 max-w-lg text-center text-lg italic leading-relaxed text-fg-mute">
-        "{quote}"
-      </p>
+      {currentQuote && (
+        <p className="mt-11 max-w-lg text-center text-lg italic leading-relaxed text-fg-mute">
+          "{currentQuote}"
+        </p>
+      )}
 
       <button
         onClick={onOpenGalaxy}

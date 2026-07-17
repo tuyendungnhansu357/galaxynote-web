@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Home, Plus, CalendarDays, Link2, FileUp, Orbit,
-  PanelLeftClose, PanelLeft, BookOpen, Sun,
+  PanelLeftClose, PanelLeft, BookOpen, Sun, Tags,
 } from 'lucide-react'
 import MenuDropdown from './MenuDropdown'
 import ImportUrlModal from './ImportUrlModal'
 import ImportMdModal from './ImportMdModal'
+import SettingsModal from './SettingsModal'
 import TagManagerModal from '../sidebar/TagManagerModal'
 import { useNoteStore } from '../../stores/noteStore'
 import { useTagStore } from '../../stores/tagStore'
@@ -25,13 +26,14 @@ import { downloadNoteAsMarkdown, downloadNoteAsHtml } from '../../lib/export'
  * - Light theme: toggle present, disabled — only the dark palette exists
  *   so far (src/index.css tokens).
  */
-export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisible, onToggleBacklinks, activeNote }) {
+export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisible, onToggleBacklinks, activeNote, onGoHome }) {
   const navigate = useNavigate()
   const { createNote, getOrCreateDailyNote, setActiveNoteId } = useNoteStore()
   const { createTag } = useTagStore()
   const [importUrlOpen, setImportUrlOpen] = useState(false)
   const [importMdOpen, setImportMdOpen] = useState(false)
   const [tagManagerOpen, setTagManagerOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
 
   async function handleNewNote() {
@@ -74,6 +76,8 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
           label="Edit"
           items={[
             { label: 'Undo / Redo — dùng nút trên toolbar soạn thảo', disabled: true },
+            null,
+            { label: '⚙️  Cài đặt…', onClick: () => setSettingsOpen(true) },
           ]}
         />
         <MenuDropdown
@@ -98,10 +102,12 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
         />
       </div>
 
-      {/* Action toolbar row */}
-      <div className="flex items-center gap-1.5 px-2 py-1.5">
+      {/* Action toolbar row — overflow-x-auto + shrink-0 so buttons never get
+          silently clipped off-screen on narrower windows (they scroll into
+          view instead of disappearing). */}
+      <div className="flex items-center gap-1.5 overflow-x-auto px-2 py-1.5 [&>*]:shrink-0">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => { navigate('/'); onGoHome?.() }}
           className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-dim hover:bg-panel-2"
         >
           <Home size={13} /> Home
@@ -117,6 +123,13 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
           className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-dim hover:bg-panel-2"
         >
           <CalendarDays size={13} /> Today
+        </button>
+
+        <button
+          onClick={() => setTagManagerOpen(true)}
+          className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-dim hover:bg-panel-2"
+        >
+          <Tags size={13} /> Quản lý Tag
         </button>
 
         <div className="mx-1 h-5 w-px bg-line" />
@@ -171,6 +184,7 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
       {importUrlOpen && <ImportUrlModal onClose={() => setImportUrlOpen(false)} onImported={handleImported} />}
       {importMdOpen && <ImportMdModal onClose={() => setImportMdOpen(false)} onImported={handleImported} />}
       {tagManagerOpen && <TagManagerModal onClose={() => setTagManagerOpen(false)} />}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {aboutOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setAboutOpen(false)}>
           <div className="w-[340px] rounded-2xl border border-line bg-panel p-6 text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
