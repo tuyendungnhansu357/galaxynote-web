@@ -100,7 +100,7 @@ export default function GraphControls({ settings, onChange, onReheat, searchQuer
         <button
           onClick={() => setPanelOpen((v) => !v)}
           title="Mở / đóng bộ điều khiển"
-          className="my-auto shrink-0 rounded-l-md border border-r-0 border-line bg-panel/90 px-1.5 py-2.5 text-[11px] tracking-widest text-fg-faint backdrop-blur transition hover:text-fg"
+          className="self-center shrink-0 rounded-l-md border border-r-0 border-line bg-panel/90 px-1.5 py-2.5 text-[11px] tracking-widest text-fg-faint backdrop-blur transition hover:text-fg"
           style={{ writingMode: 'vertical-lr' }}
         >
           ⚙ Điều khiển
