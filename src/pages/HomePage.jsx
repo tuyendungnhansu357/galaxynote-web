@@ -1,13 +1,16 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/sidebar/Sidebar'
 import NoteEditorWidget from '../components/editor/NoteEditorWidget'
 import TopBar from '../components/topbar/TopBar'
 import BacklinksPanel from '../components/backlinks/BacklinksPanel'
+import HomeDashboard from '../components/home/HomeDashboard'
 import { useNotes } from '../hooks/useNotes'
 import { useTags } from '../hooks/useTags'
 import { useLinks } from '../hooks/useLinks'
 
 export default function HomePage() {
+  const navigate = useNavigate()
   const { notes, activeNoteId, setActiveNoteId } = useNotes()
   const { noteTags } = useTags()
   useLinks()
@@ -43,8 +46,13 @@ export default function HomePage() {
           backlinksVisible={backlinksVisible}
           onToggleBacklinks={() => setBacklinksVisible((v) => !v)}
           activeNote={activeNote}
+          onGoHome={() => setActiveNoteId(null)}
         />
-        <NoteEditorWidget note={activeNote} key={activeNote?.id ?? 'none'} />
+        {activeNote ? (
+          <NoteEditorWidget note={activeNote} key={activeNote.id} />
+        ) : (
+          <HomeDashboard onOpenGalaxy={() => navigate('/graph')} />
+        )}
       </main>
       {backlinksVisible && activeNote && (
         <BacklinksPanel
