@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/authStore'
 import { useSync } from './hooks/useSync'
 import LoadingScreen from './components/ui/LoadingScreen'
 import ErrorToast from './components/ui/ErrorToast'
+import QuickSwitcherModal from './components/quickswitcher/QuickSwitcherModal'
 import AuthPage from './pages/AuthPage'
 import HomePage from './pages/HomePage'
 
@@ -26,6 +27,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ErrorToast />
+      {status === 'signed-in' && <QuickSwitcherModal />}
       <Routes>
         <Route
           path="/auth"

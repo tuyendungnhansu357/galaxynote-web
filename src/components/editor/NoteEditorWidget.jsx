@@ -4,6 +4,7 @@ import EditorFrame from './EditorFrame'
 import EditorToolbar from './EditorToolbar'
 import TagChipsBar from './TagChipsBar'
 import { useNoteStore } from '../../stores/noteStore'
+import { useActiveEditorStore } from '../../stores/activeEditorStore'
 
 export default function NoteEditorWidget({ note }) {
   const [title, setTitle] = useState(note?.title ?? '')
@@ -19,6 +20,18 @@ export default function NoteEditorWidget({ note }) {
   useEffect(() => { setReady(false) }, [note?.id])
 
   const handleReady = useCallback(() => setReady(true), [])
+
+  // Register this note's editor instance globally so TopBar → Edit →
+  // Undo/Redo can reach it without prop-drilling through HomePage. Cleared
+  // on unmount (component remounts on note switch since it's keyed by
+  // note.id) so a stale ref never lingers after the user navigates away.
+  useEffect(() => {
+    useActiveEditorStore.getState().setEditor(editorRef.current)
+    return () => useActiveEditorStore.getState().setEditor(null)
+  }, [])
+  useEffect(() => {
+    useActiveEditorStore.getState().setReady(ready)
+  }, [ready])
 
   function handleTitleChange(e) {
     const value = e.target.value

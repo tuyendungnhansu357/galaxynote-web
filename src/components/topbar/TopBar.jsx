@@ -13,6 +13,8 @@ import { useNoteStore } from '../../stores/noteStore'
 import { useTagStore } from '../../stores/tagStore'
 import { downloadNoteAsMarkdown, downloadNoteAsHtml } from '../../lib/export'
 import { useThemeStore } from '../../stores/themeStore'
+import { useActiveEditorStore } from '../../stores/activeEditorStore'
+import { useQuickSwitcherStore } from '../../stores/quickSwitcherStore'
 
 /**
  * Web port of the desktop menu bar + top toolbar (SPEC §10.1: File / Edit /
@@ -38,6 +40,9 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
   const { isDark, toggleTheme } = useThemeStore()
+  const editor = useActiveEditorStore((s) => s.editor)
+  const editorReady = useActiveEditorStore((s) => s.ready)
+  const openQuickSwitcher = useQuickSwitcherStore((s) => s.open)
 
   async function handleNewNote() {
     const note = await createNote()
@@ -78,7 +83,8 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
         <MenuDropdown
           label="Edit"
           items={[
-            { label: 'Undo / Redo — dùng nút trên toolbar soạn thảo', disabled: true },
+            { label: 'Undo', shortcut: 'Ctrl+Z', disabled: !editorReady, onClick: () => editor?.exec('undo') },
+            { label: 'Redo', shortcut: 'Ctrl+Y', disabled: !editorReady, onClick: () => editor?.exec('redo') },
             null,
             { label: '⚙️  Cài đặt…', onClick: () => setSettingsOpen(true) },
           ]}
@@ -89,6 +95,9 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
             { label: sidebarVisible ? 'Ẩn Sidebar' : 'Hiện Sidebar', shortcut: 'Ctrl+\\', onClick: onToggleSidebar },
             { label: backlinksVisible ? 'Ẩn Backlinks' : 'Hiện Backlinks', onClick: onToggleBacklinks },
             { label: 'Galaxy 3D', shortcut: 'Ctrl+G', onClick: () => navigate('/graph') },
+            null,
+            { label: 'Quick Switcher…', shortcut: 'Ctrl+K', onClick: openQuickSwitcher },
+            null,
             { label: isDark ? 'Chuyển giao diện sáng' : 'Chuyển giao diện tối', onClick: toggleTheme },
           ]}
         />
