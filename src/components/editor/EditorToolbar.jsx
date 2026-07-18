@@ -4,7 +4,7 @@ import {
   AlignLeft, AlignCenter, AlignRight, AlignJustify, Eraser, Paintbrush,
   Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare, ChevronRight,
   Table, Image as ImageIcon, Link as LinkIcon, Smile, Code, Quote, Lightbulb,
-  Video,
+  Video, Search, Columns3,
 } from 'lucide-react'
 import { uploadImageBlob } from '../../lib/attachments'
 
@@ -42,16 +42,23 @@ function Sep() {
  * inside the (unmodified) desktop editor iframe.
  *
  * Not ported yet (flagged, not silently missing): format painter drag-state,
- * block-template picker, wiki-link autocomplete, PDF embed, in-note find bar.
- * These need either a native file picker round-trip or a dialog UI that's
- * out of scope for the Sprint 4 skeleton pass.
+ * block-template picker, wiki-link autocomplete, PDF embed. Find-in-note
+ * (🔍) IS wired — see onToggleFind — and Columns is a new block type added
+ * to editor_template.html itself, so it works identically on desktop too.
  */
-export default function EditorToolbar({ editorRef, ready, noteId }) {
+export default function EditorToolbar({ editorRef, ready, noteId, onToggleFind, findOpen }) {
   const [painterActive, setPainterActive] = useState(false)
   const fileInputRef = useRef(null)
 
   function exec(name, ...args) {
     editorRef.current?.exec(name, ...args)
+  }
+
+  function insertColumns() {
+    const raw = window.prompt('Số cột (2-5):', '2')
+    if (raw == null) return
+    const n = Math.max(2, Math.min(5, parseInt(raw, 10) || 2))
+    exec('insertColumns', n)
   }
 
   function heading(level) {
@@ -113,6 +120,7 @@ export default function EditorToolbar({ editorRef, ready, noteId }) {
       <div className="flex items-center gap-0.5 overflow-x-auto px-2 py-1.5">
         <ToolButton icon={Undo2} tip="Undo (Ctrl+Z)" onClick={() => exec('undo')} disabled={!ready} />
         <ToolButton icon={Redo2} tip="Redo (Ctrl+Y)" onClick={() => exec('redo')} disabled={!ready} />
+        <ToolButton icon={Search} tip="Find in Note (Ctrl+F)" onClick={onToggleFind} active={findOpen} disabled={!ready} />
         <Sep />
 
         <select
@@ -173,6 +181,7 @@ export default function EditorToolbar({ editorRef, ready, noteId }) {
         <Sep />
 
         <ToolButton icon={Table} tip="Insert Table" onClick={() => exec('insertTable')} disabled={!ready} />
+        <ToolButton icon={Columns3} tip="Insert Columns (2-5)" onClick={insertColumns} disabled={!ready} />
         <ToolButton icon={ImageIcon} tip="Insert Image" onClick={() => fileInputRef.current?.click()} disabled={!ready} />
         <ToolButton icon={LinkIcon} tip="Insert Hyperlink" onClick={insertLink} disabled={!ready} />
         <ToolButton icon={Smile} tip="Insert Emoji" onClick={insertEmoji} disabled={!ready} />

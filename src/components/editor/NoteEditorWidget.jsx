@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { Orbit } from 'lucide-react'
 import EditorFrame from './EditorFrame'
 import EditorToolbar from './EditorToolbar'
+import FindBar from './FindBar'
 import TagChipsBar from './TagChipsBar'
 import { useNoteStore } from '../../stores/noteStore'
 import { useActiveEditorStore } from '../../stores/activeEditorStore'
@@ -9,6 +10,8 @@ import { useActiveEditorStore } from '../../stores/activeEditorStore'
 export default function NoteEditorWidget({ note }) {
   const [title, setTitle] = useState(note?.title ?? '')
   const [ready, setReady] = useState(false)
+  const [findOpen, setFindOpen] = useState(false)
+  const [findResult, setFindResult] = useState({ current: 0, total: 0 })
   const updateNote = useNoteStore((s) => s.updateNote)
   const titleTimer = useRef(null)
   const editorRef = useRef(null)
@@ -18,6 +21,21 @@ export default function NoteEditorWidget({ note }) {
   // so the toolbar must go back to "disabled" until the new document fires
   // its own on_ready.
   useEffect(() => { setReady(false) }, [note?.id])
+  // Find bar doesn't carry over to a different note.
+  useEffect(() => { setFindOpen(false); setFindResult({ current: 0, total: 0 }) }, [note?.id])
+
+  // Ctrl+F toggles the find bar — matches desktop's
+  // sc_find = QShortcut(QKeySequence("Ctrl+F"), self) in note_editor.py.
+  useEffect(() => {
+    function onKeyDown(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setFindOpen((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   const handleReady = useCallback(() => setReady(true), [])
 
@@ -62,9 +80,26 @@ export default function NoteEditorWidget({ note }) {
         />
         <TagChipsBar noteId={note.id} />
       </div>
-      <EditorToolbar editorRef={editorRef} ready={ready} noteId={note.id} />
+      <EditorToolbar
+        editorRef={editorRef}
+        ready={ready}
+        noteId={note.id}
+        onToggleFind={() => setFindOpen((v) => !v)}
+        findOpen={findOpen}
+      />
+      <FindBar
+        editorRef={editorRef}
+        open={findOpen}
+        onClose={() => setFindOpen(false)}
+        result={findResult}
+      />
       <div className="flex-1 overflow-hidden">
-        <EditorFrame ref={editorRef} note={note} onReady={handleReady} />
+        <EditorFrame
+          ref={editorRef}
+          note={note}
+          onReady={handleReady}
+          onFindResult={(current, total) => setFindResult({ current, total })}
+        />
       </div>
     </div>
   )

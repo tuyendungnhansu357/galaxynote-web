@@ -170,6 +170,25 @@ body.multi-selecting *{user-select:none!important;-webkit-user-select:none!impor
 .tgl:hover .add-child-btn{opacity:.6}
 .add-child-btn:hover{opacity:1!important;background:var(--alt)}
 
+/* ── Columns block ── */
+.cols-outer{display:grid;gap:20px;width:100%;align-items:start}
+.col-wrap{min-width:0}
+.col-body{
+  min-height:32px;padding:4px 8px;border:1px dashed var(--mid);border-radius:6px;
+}
+.col-body .blk-row:first-child{margin-top:0}
+.col-resize-hint{
+  display:flex;align-items:center;justify-content:center;gap:4px;
+  margin-bottom:6px;font-size:11px;color:var(--ph);
+}
+.col-resize-hint select{
+  background:var(--alt);color:var(--fg);border:1px solid var(--mid);border-radius:4px;
+  font-size:11px;padding:1px 4px;cursor:pointer;
+}
+.col-del-btn{cursor:pointer;color:var(--ph);padding:0 3px;border-radius:3px}
+.col-del-btn:hover{background:var(--alt);color:#e05c6a}
+.cols-row-wrap{flex:1;min-width:0}
+
 /* ── Image ── */
 .img-outer{flex:1;margin:2px 0}
 /* Broken / unloaded images → styled placeholder */
@@ -464,7 +483,7 @@ let _findIdx = 0;
 function _findNested(el){
   let p = el.parentElement;
   while(p && p !== root){
-    if(p.classList.contains('tgl-body') || p.classList.contains('callout-children')) return p;
+    if(p.classList.contains('tgl-body') || p.classList.contains('callout-children') || p.classList.contains('col-body')) return p;
     p = p.parentElement;
   }
   return root;
@@ -1023,6 +1042,7 @@ function serializeContainer(c){
     let bg = '';
     for(const cls of row.classList){ if(cls.startsWith('bg-')){ bg = cls; break; } }
     const tglRow  = row.querySelector(':scope>.tgl-row');
+    const colsOuter = row.querySelector(':scope>div>.cols-outer') || row.querySelector(':scope>.cols-outer');
     const imgOuter= row.querySelector(':scope>.img-outer');
     const pdfOuter2= row.querySelector(':scope>.pdf-outer');
     const embedEl = !pdfOuter2 && (row.querySelector(':scope>[data-embed-align]') || row.querySelector(':scope>.embed-outer'));
@@ -1050,6 +1070,12 @@ function serializeContainer(c){
       console.log('[serialize] toggle "' + (titleEl?.textContent||'').slice(0,30) + '" children:', children.length, children.map(c=>c.t));
       out.push({t:'toggle', title:titleHtml, open:!(tgl&&tgl.dataset.closed), bg,
                 children});
+      continue;
+    }
+    if(colsOuter){
+      const count = parseInt(colsOuter.dataset.colCount) || colsOuter.querySelectorAll(':scope>.col-wrap').length;
+      const cols = [...colsOuter.querySelectorAll(':scope>.col-wrap>.col-body')].map(cb => serializeContainer(cb));
+      out.push({t:'columns', count, cols, bg});
       continue;
     }
     if(imgOuter){
@@ -1183,6 +1209,7 @@ function loadContainer(c, blocks){
       if(b.blockType && _r){ const _blk=_r.querySelector('.block'); if(_blk){ _blk.dataset.blkType=b.blockType; if(b.blockType==='numbered') _blk.dataset.num='1'; } }
     }
     else if(b.t==='toggle') addToggleRow(c, b.title||'', b.open!==false, b.children||[], false, b.bg);
+    else if(b.t==='columns') addColumnsRow(c, b.count||2, b.cols||[], false, b.bg);
     else if(b.t==='task'){
       const r = addTaskRow(c, b.html||'', b.done||false, b.block_id||genId(), false, b.bg);
       if(r && b.due) _updateTaskDueBadge(r, b.due);
@@ -1417,6 +1444,68 @@ function addTaskRow(container, html, isDone, blockId, focus, bg){
   taskRow.appendChild(cb); taskRow.appendChild(txt);
   row.appendChild(taskRow); container.appendChild(row);
   if(focus){ txt.focus(); placeCaretAtEnd(txt); }
+  return row;
+}
+
+// ── addColumnsRow ─────────────────────────────────────────────────────────────
+// Columns block: N side-by-side containers, each holding its own set of
+// blocks. Reuses loadContainer()/serializeContainer() recursively — same
+// pattern as toggle's .tgl-body, generalised to N siblings instead of 1.
+// Scope note: columns hold text/task/image/toggle/etc. blocks like any
+// container, but a column cannot itself contain another columns block
+// (nesting columns-in-columns is blocked in insertColumns to keep the grid
+// layout + resize math simple — an explicit limit, not a silent one).
+function addColumnsRow(container, count, colsBlocks, focusFirst, bg){
+  count = Math.max(2, Math.min(5, parseInt(count) || 2));
+  const row = document.createElement('div'); row.className = 'blk-row';
+  if(bg) row.classList.add(bg);
+  row.appendChild(makeDragHandle());
+
+  const hint = document.createElement('div'); hint.className = 'col-resize-hint';
+  hint.contentEditable = 'false';
+  const label = document.createElement('span'); label.textContent = '▦ Columns:';
+  const sel = document.createElement('select');
+  for(let n = 2; n <= 5; n++){
+    const opt = document.createElement('option'); opt.value = String(n); opt.textContent = String(n);
+    if(n === count) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  sel.addEventListener('change', () => {
+    const newCount = parseInt(sel.value) || 2;
+    const cols = [...outer.querySelectorAll(':scope>.col-wrap>.col-body')].map(cb => serializeContainer(cb));
+    while(cols.length < newCount) cols.push([]);
+    cols.length = newCount;
+    const nr = addColumnsRow(container, newCount, cols, false, bg);
+    row.after(nr); row.remove(); notify();
+  });
+  const del = document.createElement('span'); del.className = 'col-del-btn'; del.textContent = '🗑';
+  del.title = 'Delete columns block';
+  del.addEventListener('click', () => {
+    if(container.querySelectorAll(':scope>.blk-row').length <= 1) return; // keep container non-empty
+    row.remove(); notify();
+  });
+  hint.appendChild(label); hint.appendChild(sel); hint.appendChild(del);
+
+  const outer = document.createElement('div'); outer.className = 'cols-outer';
+  outer.dataset.colCount = String(count);
+  outer.style.gridTemplateColumns = `repeat(${count}, 1fr)`;
+  for(let i = 0; i < count; i++){
+    const colWrap = document.createElement('div'); colWrap.className = 'col-wrap';
+    const colBody = document.createElement('div'); colBody.className = 'col-body blk-container';
+    colWrap.appendChild(colBody);
+    outer.appendChild(colWrap);
+    loadContainer(colBody, (colsBlocks && colsBlocks[i]) || []);
+  }
+
+  const wrap = document.createElement('div'); wrap.className = 'cols-row-wrap';
+  wrap.appendChild(hint); wrap.appendChild(outer);
+  row.appendChild(wrap);
+  container.appendChild(row);
+
+  if(focusFirst){
+    const first = outer.querySelector('.col-body .block,.col-body .task-text');
+    if(first){ first.focus(); placeCaretAtEnd(first); }
+  }
   return row;
 }
 
@@ -2217,8 +2306,13 @@ function duplicateBlock(row){
   const isTable    = !!row.querySelector(':scope>.blk-table-wrap');
   const isCallout  = !!row.querySelector(':scope>.callout-wrap');
   const isCode     = !!row.querySelector(':scope>.code-outer');
+  const colsOuter  = row.querySelector(':scope>div>.cols-outer') || row.querySelector(':scope>.cols-outer');
   let nr;
-  if(isCode){
+  if(colsOuter){
+    const count = parseInt(colsOuter.dataset.colCount) || colsOuter.querySelectorAll(':scope>.col-wrap').length;
+    const cols = [...colsOuter.querySelectorAll(':scope>.col-wrap>.col-body')].map(cb => serializeContainer(cb));
+    nr = addColumnsRow(container, count, cols, false);
+  } else if(isCode){
     const outer = row.querySelector('.code-outer');
     const pre   = outer.querySelector('.code-block');
     const code  = pre ? _getPreText(pre) : '';
@@ -2991,6 +3085,7 @@ const SLASH_CMDS = [
   { sep:true },
   { section: 'Insert' },
   { icon:'⊞',  label:'Table',       hint:'',                 key:'table',   fn: ()=>{ replaceSlashBlock(()=>editorCmd.insertTable()); } },
+  { icon:'▦',  label:'Columns',     hint:'2-5 cột',          key:'columns', fn: ()=>{ replaceSlashBlock(()=>editorCmd.insertColumns(2)); } },
   { icon:'❝',  label:'Quote',       hint:'',                 key:'quote',   fn: ()=>{ replaceSlashBlock(()=>editorCmd.insertQuoteBlock()); } },
   { icon:'💡', label:'Callout',     hint:'',                 key:'callout', fn: ()=>{ replaceSlashBlock(()=>editorCmd.insertCallout()); } },
   { icon:'</>',label:'Code',        hint:'',                 key:'code',    fn: ()=>{ replaceSlashBlock(()=>editorCmd.insertCodeBlock()); } },
@@ -3255,6 +3350,18 @@ const editorCmd = window.editorCmd = {
   addToggle(t){
     const c=getContainer(), target=_lastFocusedRow;
     const row=addToggleRow(c,t||'',true,[],true);
+    _placeBlock(row, target, c);
+    notify();
+  },
+  insertColumns(n){
+    // Nesting columns-in-columns is blocked (see addColumnsRow comment) —
+    // fall back to inserting at root if the focused container is itself
+    // a column body, instead of silently creating a broken nested layout.
+    let c=getContainer(), target=_lastFocusedRow;
+    if(c.classList && c.classList.contains('col-body')){ c = root; target = null; }
+    const cols = []; const count = Math.max(2, Math.min(5, parseInt(n)||2));
+    for(let i=0;i<count;i++) cols.push([]);
+    const row=addColumnsRow(c, count, cols, true);
     _placeBlock(row, target, c);
     notify();
   },

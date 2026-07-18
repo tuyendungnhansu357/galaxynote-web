@@ -69,7 +69,7 @@ function urlToDataUrl(url) {
  * Storage — that upload direction (web → Storage) is the next piece of
  * attachment work, not done in this pass.
  */
-const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
+const EditorFrame = forwardRef(function EditorFrame({ note, onReady, onFindResult }, ref) {
   const iframeRef = useRef(null)
   const readyRef = useRef(false)
   const saveTimerRef = useRef(null)
@@ -160,6 +160,12 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
 
           case 'get_theme':
             respond(callId, theme)
+            break
+
+          // Fired by editorCmd._updateFindActive() (Ctrl+F find-in-note)
+          // every time the match set or the current index changes.
+          case 'on_find_result':
+            onFindResult?.(args[0], args[1])
             break
 
           // Used by the editor's inline #tag highlighting (_loadTagsMap in
@@ -314,7 +320,7 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [note, theme, postToIframe, respond, flushPendingSave, onReady])
+  }, [note, theme, postToIframe, respond, flushPendingSave, onReady, onFindResult])
 
   // When switching notes, push the new content in once the iframe is ready.
   useEffect(() => {
