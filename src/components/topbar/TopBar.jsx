@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Home, Plus, CalendarDays, Link2, FileUp, Orbit,
@@ -9,6 +9,7 @@ import ImportUrlModal from './ImportUrlModal'
 import ImportMdModal from './ImportMdModal'
 import SettingsModal from './SettingsModal'
 import TagManagerModal from '../sidebar/TagManagerModal'
+import GuideModal from '../help/GuideModal'
 import { useNoteStore } from '../../stores/noteStore'
 import { useTagStore } from '../../stores/tagStore'
 import { downloadNoteAsMarkdown, downloadNoteAsHtml } from '../../lib/export'
@@ -39,10 +40,24 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
   const [tagManagerOpen, setTagManagerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [guideOpen, setGuideOpen] = useState(false)
   const { isDark, toggleTheme } = useThemeStore()
   const editor = useActiveEditorStore((s) => s.editor)
   const editorReady = useActiveEditorStore((s) => s.ready)
   const openQuickSwitcher = useQuickSwitcherStore((s) => s.open)
+
+  // F1 opens the guide from anywhere — matches desktop's
+  // act_guide.setShortcut("F1") in main_window.py.
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === 'F1') {
+        e.preventDefault()
+        setGuideOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   async function handleNewNote() {
     const note = await createNote()
@@ -110,7 +125,11 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
         />
         <MenuDropdown
           label="Help"
-          items={[{ label: 'Giới thiệu GalaxyNote', onClick: () => setAboutOpen(true) }]}
+          items={[
+            { label: '📖  Hướng dẫn sử dụng', shortcut: 'F1', onClick: () => setGuideOpen(true) },
+            null,
+            { label: 'ℹ️  Giới thiệu GalaxyNote', onClick: () => setAboutOpen(true) },
+          ]}
         />
       </div>
 
@@ -197,15 +216,36 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
       {importMdOpen && <ImportMdModal onClose={() => setImportMdOpen(false)} onImported={handleImported} />}
       {tagManagerOpen && <TagManagerModal onClose={() => setTagManagerOpen(false)} />}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {guideOpen && <GuideModal onClose={() => setGuideOpen(false)} />}
       {aboutOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setAboutOpen(false)}>
-          <div className="w-[340px] rounded-2xl border border-line bg-panel p-6 text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-star/15">
-              <span className="h-2.5 w-2.5 rounded-full bg-star shadow-[0_0_12px_3px_rgba(79,142,247,0.6)]" />
+          <div className="w-[400px] rounded-2xl border border-line bg-panel p-7 text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display text-2xl font-bold text-fg">🌌 GalaxyNote</h3>
+            <p className="mt-1 text-xs text-fg-mute">Phiên bản 1.0.0 · Web</p>
+
+            <p className="mt-5 text-[13px] leading-relaxed text-fg-faint">
+              Hệ thống quản lý kiến thức cá nhân tập trung vào mạng lưới Tag — giúp bạn khám phá và kết nối ý tưởng thông qua mối quan hệ giữa các chủ đề kiến thức.
+            </p>
+
+            <div className="my-5 h-px bg-line" />
+
+            <div className="space-y-2 text-left">
+              <div className="flex justify-between text-xs">
+                <span className="text-fg-mute">👤 Tác giả</span>
+                <span className="font-medium text-fg-dim">Phạm Văn Vinh</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-fg-mute">📞 Điện thoại / Zalo</span>
+                <span className="font-medium text-fg-dim">0888 035 077</span>
+              </div>
             </div>
-            <h3 className="font-display text-lg font-semibold text-fg">GalaxyNote</h3>
-            <p className="mt-1 text-xs text-fg-faint">Tag là hành tinh. Note là vệ tinh.</p>
-            <p className="mt-3 text-[11px] text-fg-mute">Web companion — Sprint 4</p>
+
+            <button
+              onClick={() => setAboutOpen(false)}
+              className="mt-6 rounded-md border border-line-2 bg-panel-2 px-6 py-1.5 text-xs font-medium text-fg-dim hover:bg-line hover:text-fg"
+            >
+              Đóng
+            </button>
           </div>
         </div>
       )}
