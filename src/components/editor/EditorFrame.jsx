@@ -4,19 +4,31 @@ import { useTagStore } from '../../stores/tagStore'
 import { useAuthStore } from '../../stores/authStore'
 import { useLinkStore } from '../../stores/linkStore'
 import { useTaskStore } from '../../stores/taskStore'
+import { useThemeStore } from '../../stores/themeStore'
 import { supabase } from '../../lib/supabase'
 import { uploadImageBlob, dataUrlToBlob } from '../../lib/attachments'
 import { syncLinksFromContent } from '../../lib/links'
 import { syncTasksFromContent } from '../../lib/tasks'
 
-// Same shape as the QSS "dark" theme desktop applies via editorCmd.applyTheme().
+// Same shape as the QSS "dark" theme desktop applies via editorCmd.applyTheme()
+// — exact values from ui/note_editor.py::set_theme(is_dark=True).
 const DARK_THEME = {
-  bg: '#0d1120',
+  bg: '#0f1629',
   fg: '#e8edf8',
   ph: '#4a5068',   // placeholder
-  sel: '#4f8ef733', // selection tint
-  mid: '#1e2840',  // dividers
-  alt: '#131929',  // alt row background
+  sel: '#4f8ef7',  // selection tint
+  mid: '#2a3354',  // dividers
+  alt: '#1c2540',  // alt row background
+}
+
+// ui/note_editor.py::set_theme(is_dark=False) — exact light-mode values.
+const LIGHT_THEME = {
+  bg: '#ffffff',
+  fg: '#1a2040',
+  ph: '#94a3b8',
+  sel: '#4f8ef7',
+  mid: '#e2e8f0',
+  alt: '#f0f3ff',
 }
 
 const AUTOSAVE_DELAY_MS = 2000 // mirrors utils/constants.py DEFAULT_SETTINGS.autosave_delay_ms
@@ -61,6 +73,8 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
   const iframeRef = useRef(null)
   const readyRef = useRef(false)
   const saveTimerRef = useRef(null)
+  const isDark = useThemeStore((s) => s.isDark)
+  const theme = isDark ? DARK_THEME : LIGHT_THEME
   const pendingSaveRef = useRef(null) // { noteId, json } — not yet flushed to Supabase
   const updateNote = useNoteStore((s) => s.updateNote)
 
@@ -140,12 +154,12 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
           case 'on_ready':
             readyRef.current = true
             if (note) postToIframe('set-content', { content: note.content || '' })
-            postToIframe('apply-theme', { theme: DARK_THEME })
+            postToIframe('apply-theme', { theme })
             onReady?.()
             break
 
           case 'get_theme':
-            respond(callId, DARK_THEME)
+            respond(callId, theme)
             break
 
           // Used by the editor's inline #tag highlighting (_loadTagsMap in
@@ -300,7 +314,7 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [note, postToIframe, respond, flushPendingSave, onReady])
+  }, [note, theme, postToIframe, respond, flushPendingSave, onReady])
 
   // When switching notes, push the new content in once the iframe is ready.
   useEffect(() => {
@@ -308,6 +322,12 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady }, ref) {
       postToIframe('set-content', { content: note.content || '' })
     }
   }, [note?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Push theme changes live if the user toggles Light/Dark while a note is
+  // already open, instead of waiting for the next note load.
+  useEffect(() => {
+    if (readyRef.current) postToIframe('apply-theme', { theme })
+  }, [theme]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <iframe

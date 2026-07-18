@@ -79,7 +79,7 @@ export default function GraphPage() {
   }
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-void">
+    <div className="galaxy-dark-scope relative h-screen w-screen overflow-hidden bg-void">
       {/* HUD — mirrors resources/html/graph_browser.html's top bar */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-3 bg-gradient-to-b from-void/95 to-transparent px-4 py-2.5">
         <button

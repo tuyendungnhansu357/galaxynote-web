@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Home, Plus, CalendarDays, Link2, FileUp, Orbit,
-  PanelLeftClose, PanelLeft, BookOpen, Sun, Tags,
+  PanelLeftClose, PanelLeft, BookOpen, Sun, Moon, Tags,
 } from 'lucide-react'
 import MenuDropdown from './MenuDropdown'
 import ImportUrlModal from './ImportUrlModal'
@@ -12,6 +12,7 @@ import TagManagerModal from '../sidebar/TagManagerModal'
 import { useNoteStore } from '../../stores/noteStore'
 import { useTagStore } from '../../stores/tagStore'
 import { downloadNoteAsMarkdown, downloadNoteAsHtml } from '../../lib/export'
+import { useThemeStore } from '../../stores/themeStore'
 
 /**
  * Web port of the desktop menu bar + top toolbar (SPEC §10.1: File / Edit /
@@ -23,8 +24,9 @@ import { downloadNoteAsMarkdown, downloadNoteAsHtml } from '../../lib/export'
  *   editor's own toolbar (bold/italic/etc.), which already calls
  *   editorCmd.undo()/redo() directly. Duplicating that into a global menu
  *   would need lifting the active editor ref up through HomePage; deferred.
- * - Light theme: toggle present, disabled — only the dark palette exists
- *   so far (src/index.css tokens).
+ * - Light theme: fully wired (useThemeStore + index.css [data-theme="light"]
+ *   overrides). Galaxy 3D and the Auth starfield intentionally stay dark in
+ *   both themes, same as desktop's graph_3d_view.py never calling set_theme.
  */
 export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisible, onToggleBacklinks, activeNote, onGoHome }) {
   const navigate = useNavigate()
@@ -35,6 +37,7 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
   const [tagManagerOpen, setTagManagerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const { isDark, toggleTheme } = useThemeStore()
 
   async function handleNewNote() {
     const note = await createNote()
@@ -86,7 +89,7 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
             { label: sidebarVisible ? 'Ẩn Sidebar' : 'Hiện Sidebar', shortcut: 'Ctrl+\\', onClick: onToggleSidebar },
             { label: backlinksVisible ? 'Ẩn Backlinks' : 'Hiện Backlinks', onClick: onToggleBacklinks },
             { label: 'Galaxy 3D', shortcut: 'Ctrl+G', onClick: () => navigate('/graph') },
-            { label: 'Giao diện sáng — sắp có', disabled: true },
+            { label: isDark ? 'Chuyển giao diện sáng' : 'Chuyển giao diện tối', onClick: toggleTheme },
           ]}
         />
         <MenuDropdown
@@ -173,11 +176,11 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
         <div className="flex-1" />
 
         <button
-          disabled
-          title="Giao diện sáng — sắp có"
-          className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-mute opacity-50"
+          onClick={toggleTheme}
+          title={isDark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+          className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-faint transition hover:bg-panel-2 hover:text-fg"
         >
-          <Sun size={13} /> Light
+          {isDark ? <Sun size={13} /> : <Moon size={13} />} {isDark ? 'Light' : 'Dark'}
         </button>
       </div>
 

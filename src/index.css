@@ -26,6 +26,40 @@
   --color-dwarf: #f0c060;
 }
 
+/* -- Light theme — matches resources/styles/light.qss exactly --
+   Only the app-chrome tokens change (sidebar/topbar/editor/dialogs/home).
+   --color-star/nebula/comet/flare/dwarf are data-accent colors (tags, graph
+   nodes) and intentionally stay identical in both themes, same as desktop. */
+:root[data-theme="light"] {
+  --color-bg: #eef0f8;
+  --color-panel: #f5f7ff;
+  --color-panel-2: #ffffff;
+  --color-line: #dde0ee;
+  --color-line-2: #c5cad8;
+
+  --color-fg: #1a2040;
+  --color-fg-dim: #3a4060;
+  --color-fg-faint: #5a6480;
+  --color-fg-mute: #9aa0b4;
+}
+
+/* Galaxy 3D and the Auth starfield always render on the dark space palette
+   regardless of the app theme toggle — desktop's graph_3d_view.py is never
+   touched by _apply_theme(), so the galaxy stays dark even in Light mode.
+   Applied as a class on those pages' root element to re-pin the tokens. */
+.galaxy-dark-scope {
+  --color-void: #05070d;
+  --color-bg: #0a0e1a;
+  --color-panel: #0d1120;
+  --color-panel-2: #131929;
+  --color-line: #1e2840;
+  --color-line-2: #2a3354;
+  --color-fg: #e8edf8;
+  --color-fg-dim: #c4cad8;
+  --color-fg-faint: #8b95b0;
+  --color-fg-mute: #4a5068;
+}
+
 @layer base {
   * { border-color: var(--color-line); }
   html, body, #root { height: 100%; background: var(--color-bg); }

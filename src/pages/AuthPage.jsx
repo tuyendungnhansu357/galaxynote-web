@@ -24,7 +24,7 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="relative flex h-screen w-screen items-center justify-center overflow-hidden bg-void">
+    <div className="galaxy-dark-scope relative flex h-screen w-screen items-center justify-center overflow-hidden bg-void">
       {/* Signature element: a slow-drifting starfield behind the card — the one
           place this page spends its visual budget, everything else stays quiet. */}
       <div className="bg-starfield absolute inset-0 opacity-70 [animation:drift_120s_linear_infinite]" />
