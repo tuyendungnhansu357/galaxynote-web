@@ -171,16 +171,26 @@ body.multi-selecting *{user-select:none!important;-webkit-user-select:none!impor
 .add-child-btn:hover{opacity:1!important;background:var(--alt)}
 
 /* ── Columns block ── */
-.cols-outer{display:grid;gap:20px;width:100%;align-items:start}
+.cols-outer{display:grid;width:100%;align-items:start}
 .col-wrap{min-width:0}
 .col-body{
   min-height:32px;padding:4px 8px;border:1px dashed var(--mid);border-radius:6px;
 }
 .col-body .blk-row:first-child{margin-top:0}
+.col-resize-handle{
+  cursor:col-resize;position:relative;align-self:stretch;
+}
+.col-resize-handle::after{
+  content:'';position:absolute;left:2px;right:2px;top:4px;bottom:4px;
+  border-radius:3px;background:var(--mid);transition:background .15s;
+}
+.col-resize-handle:hover::after,.col-resize-handle:active::after{background:var(--sel)}
 .col-resize-hint{
-  display:flex;align-items:center;justify-content:center;gap:4px;
+  display:none; /* shown only on hover/focus — see .cols-row-wrap rules below */
+  align-items:center;justify-content:center;gap:4px;
   margin-bottom:6px;font-size:11px;color:var(--ph);
 }
+.cols-row-wrap:hover .col-resize-hint,.cols-row-wrap:focus-within .col-resize-hint{display:flex}
 .col-resize-hint select{
   background:var(--alt);color:var(--fg);border:1px solid var(--mid);border-radius:4px;
   font-size:11px;padding:1px 4px;cursor:pointer;
@@ -452,6 +462,13 @@ let _ready = false, _ro = false;
 /** Safe wrapper: e.target may be a Text node (no .closest). Always use tgt(e). */
 function tgt(e){ const t=e.target; return (t && t.nodeType===1) ? t : t && t.parentElement; }
 let _focusedContainer = null, _lastFocusedRow = null;
+// "Pinned" focus snapshot — captured synchronously at the moment a toolbar
+// button is clicked, consumed once by the next insert call. Needed because
+// Insert Image goes through an async gap (native file picker + Supabase
+// upload) during which the live _focusedContainer/_lastFocusedRow can go
+// stale; desktop doesn't have this problem since QFileDialog blocks the
+// whole Python thread, so JS state can't drift while it's open.
+let _pinnedContainer = null, _pinnedRow = null;
 let _history = [], _histIdx = -1, _undoing = false;
 let _undoInProgress = false; // blocks MutationObserver deletion during undo+restore
 
@@ -1074,8 +1091,9 @@ function serializeContainer(c){
     }
     if(colsOuter){
       const count = parseInt(colsOuter.dataset.colCount) || colsOuter.querySelectorAll(':scope>.col-wrap').length;
+      const widths = JSON.parse(colsOuter.dataset.colWidths || '[]');
       const cols = [...colsOuter.querySelectorAll(':scope>.col-wrap>.col-body')].map(cb => serializeContainer(cb));
-      out.push({t:'columns', count, cols, bg});
+      out.push({t:'columns', count, widths, cols, bg});
       continue;
     }
     if(imgOuter){
@@ -1209,7 +1227,7 @@ function loadContainer(c, blocks){
       if(b.blockType && _r){ const _blk=_r.querySelector('.block'); if(_blk){ _blk.dataset.blkType=b.blockType; if(b.blockType==='numbered') _blk.dataset.num='1'; } }
     }
     else if(b.t==='toggle') addToggleRow(c, b.title||'', b.open!==false, b.children||[], false, b.bg);
-    else if(b.t==='columns') addColumnsRow(c, b.count||2, b.cols||[], false, b.bg);
+    else if(b.t==='columns') addColumnsRow(c, b.count||2, b.cols||[], false, b.bg, b.widths);
     else if(b.t==='task'){
       const r = addTaskRow(c, b.html||'', b.done||false, b.block_id||genId(), false, b.bg);
       if(r && b.due) _updateTaskDueBadge(r, b.due);
@@ -1455,12 +1473,79 @@ function addTaskRow(container, html, isDone, blockId, focus, bg){
 // container, but a column cannot itself contain another columns block
 // (nesting columns-in-columns is blocked in insertColumns to keep the grid
 // layout + resize math simple — an explicit limit, not a silent one).
-function addColumnsRow(container, count, colsBlocks, focusFirst, bg){
+// Wires a drag handle between column `leftIndex` and `leftIndex+1`. Widths
+// are stored as fr-unit numbers (outer.dataset.colWidths, JSON array); drag
+// delta in pixels is converted to fr using the outer's current rendered
+// width (minus the fixed 6px handle tracks), so resizing feels 1:1 with the
+// mouse regardless of how many columns there are.
+function attachColResize(handle, outer, leftIndex, applyTemplate){
+  handle.addEventListener('mousedown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const widths = JSON.parse(outer.dataset.colWidths);
+    const startX = e.clientX;
+    const rect = outer.getBoundingClientRect();
+    const handleTrackPx = 6 * (widths.length - 1);
+    const sumFr = widths.reduce((a, b) => a + b, 0);
+    const pxPerFr = Math.max(1, rect.width - handleTrackPx) / sumFr;
+    const minFr = 0.25;
+    document.body.style.cursor = 'col-resize';
+
+    function onMove(e2){
+      const dFr = (e2.clientX - startX) / pxPerFr;
+      let a = widths[leftIndex] + dFr, b = widths[leftIndex + 1] - dFr;
+      if(a < minFr){ b -= (minFr - a); a = minFr; }
+      if(b < minFr){ a -= (minFr - b); b = minFr; }
+      const next = widths.slice(); next[leftIndex] = a; next[leftIndex + 1] = b;
+      outer.dataset.colWidths = JSON.stringify(next);
+      applyTemplate();
+    }
+    function onUp(){
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      notify();
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function addColumnsRow(container, count, colsBlocks, focusFirst, bg, widths){
   count = Math.max(2, Math.min(5, parseInt(count) || 2));
+  if(!Array.isArray(widths) || widths.length !== count) widths = Array(count).fill(1);
+
   const row = document.createElement('div'); row.className = 'blk-row';
   if(bg) row.classList.add(bg);
   row.appendChild(makeDragHandle());
 
+  const outer = document.createElement('div'); outer.className = 'cols-outer';
+  outer.dataset.colCount = String(count);
+  outer.dataset.colWidths = JSON.stringify(widths);
+
+  function applyTemplate(){
+    const w = JSON.parse(outer.dataset.colWidths);
+    outer.style.gridTemplateColumns = w.map(f => f.toFixed(4)+'fr').join(' 6px ');
+  }
+
+  for(let i = 0; i < count; i++){
+    const colWrap = document.createElement('div'); colWrap.className = 'col-wrap';
+    const colBody = document.createElement('div'); colBody.className = 'col-body blk-container';
+    colWrap.appendChild(colBody);
+    outer.appendChild(colWrap);
+    loadContainer(colBody, (colsBlocks && colsBlocks[i]) || []);
+    if(i < count - 1){
+      const handle = document.createElement('div'); handle.className = 'col-resize-handle';
+      handle.contentEditable = 'false'; handle.title = 'Drag to resize';
+      attachColResize(handle, outer, i, applyTemplate);
+      outer.appendChild(handle);
+    }
+  }
+  applyTemplate();
+
+  // Small control bar (change column count / delete block) — hidden by
+  // default, only shown while a block inside this row has focus or the
+  // row is hovered (see .cols-row-wrap:hover/:focus-within CSS), so it
+  // doesn't clutter the page for a block the user isn't currently editing.
   const hint = document.createElement('div'); hint.className = 'col-resize-hint';
   hint.contentEditable = 'false';
   const label = document.createElement('span'); label.textContent = '▦ Columns:';
@@ -1475,7 +1560,7 @@ function addColumnsRow(container, count, colsBlocks, focusFirst, bg){
     const cols = [...outer.querySelectorAll(':scope>.col-wrap>.col-body')].map(cb => serializeContainer(cb));
     while(cols.length < newCount) cols.push([]);
     cols.length = newCount;
-    const nr = addColumnsRow(container, newCount, cols, false, bg);
+    const nr = addColumnsRow(container, newCount, cols, false, bg); // widths reset to equal on count change
     row.after(nr); row.remove(); notify();
   });
   const del = document.createElement('span'); del.className = 'col-del-btn'; del.textContent = '🗑';
@@ -1486,23 +1571,13 @@ function addColumnsRow(container, count, colsBlocks, focusFirst, bg){
   });
   hint.appendChild(label); hint.appendChild(sel); hint.appendChild(del);
 
-  const outer = document.createElement('div'); outer.className = 'cols-outer';
-  outer.dataset.colCount = String(count);
-  outer.style.gridTemplateColumns = `repeat(${count}, 1fr)`;
-  for(let i = 0; i < count; i++){
-    const colWrap = document.createElement('div'); colWrap.className = 'col-wrap';
-    const colBody = document.createElement('div'); colBody.className = 'col-body blk-container';
-    colWrap.appendChild(colBody);
-    outer.appendChild(colWrap);
-    loadContainer(colBody, (colsBlocks && colsBlocks[i]) || []);
-  }
-
   const wrap = document.createElement('div'); wrap.className = 'cols-row-wrap';
   wrap.appendChild(hint); wrap.appendChild(outer);
   row.appendChild(wrap);
   container.appendChild(row);
 
   if(focusFirst){
+
     const first = outer.querySelector('.col-body .block,.col-body .task-text');
     if(first){ first.focus(); placeCaretAtEnd(first); }
   }
@@ -2310,8 +2385,9 @@ function duplicateBlock(row){
   let nr;
   if(colsOuter){
     const count = parseInt(colsOuter.dataset.colCount) || colsOuter.querySelectorAll(':scope>.col-wrap').length;
+    const widths = JSON.parse(colsOuter.dataset.colWidths || '[]');
     const cols = [...colsOuter.querySelectorAll(':scope>.col-wrap>.col-body')].map(cb => serializeContainer(cb));
-    nr = addColumnsRow(container, count, cols, false);
+    nr = addColumnsRow(container, count, cols, false, undefined, widths);
   } else if(isCode){
     const outer = row.querySelector('.code-outer');
     const pre   = outer.querySelector('.code-block');
@@ -3377,8 +3453,21 @@ const editorCmd = window.editorCmd = {
     _placeBlock(row, target, c);
     notify();
   },
+  // Call right before opening any external/async picker (file input, etc.)
+  // so the insert command that follows lands in the right place even if
+  // focus drifts during the gap. Consumed once by insertImage below.
+  pinFocus(){
+    _pinnedContainer = getContainer();
+    _pinnedRow = _lastFocusedRow;
+  },
   insertImage(src,path){
-    const c=getContainer(), target=_lastFocusedRow;
+    let c, target;
+    if(_pinnedContainer && root.contains(_pinnedContainer)){
+      c = _pinnedContainer; target = _pinnedRow;
+    } else {
+      c = getContainer(); target = _lastFocusedRow;
+    }
+    _pinnedContainer = null; _pinnedRow = null;
     const row=addImageRow(c,src,0,'left',path);
     _placeBlock(row, target, c);
     // Remove empty text block that contained the slash command (async cleanup

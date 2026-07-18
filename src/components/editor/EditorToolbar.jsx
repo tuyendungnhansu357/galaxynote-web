@@ -182,7 +182,7 @@ export default function EditorToolbar({ editorRef, ready, noteId, onToggleFind, 
 
         <ToolButton icon={Table} tip="Insert Table" onClick={() => exec('insertTable')} disabled={!ready} />
         <ToolButton icon={Columns3} tip="Insert Columns (2-5)" onClick={insertColumns} disabled={!ready} />
-        <ToolButton icon={ImageIcon} tip="Insert Image" onClick={() => fileInputRef.current?.click()} disabled={!ready} />
+        <ToolButton icon={ImageIcon} tip="Insert Image" onClick={() => { exec('pinFocus'); fileInputRef.current?.click() }} disabled={!ready} />
         <ToolButton icon={LinkIcon} tip="Insert Hyperlink" onClick={insertLink} disabled={!ready} />
         <ToolButton icon={Smile} tip="Insert Emoji" onClick={insertEmoji} disabled={!ready} />
         <Sep />
