@@ -15,6 +15,7 @@ export default function NoteEditorWidget({ note }) {
   const updateNote = useNoteStore((s) => s.updateNote)
   const titleTimer = useRef(null)
   const editorRef = useRef(null)
+  const toolbarRef = useRef(null)
 
   useEffect(() => { setTitle(note?.title ?? '') }, [note?.id])
   // The iframe fully reloads on note switch (EditorFrame keys it by note.id),
@@ -60,6 +61,24 @@ export default function NoteEditorWidget({ note }) {
     }, 500)
   }
 
+  // The "/" slash-menu in editor_template.html calls
+  // window.bridge.trigger_insert_image() etc. — same bridge-call mechanism
+  // as everything else. Desktop's Python side answers these directly;
+  // here EditorFrame relays them up to whichever toolbar method does the
+  // same thing the matching toolbar button already does.
+  const BRIDGE_TO_TOOLBAR = {
+    trigger_insert_image: 'triggerInsertImage',
+    trigger_insert_link: 'triggerInsertLink',
+    trigger_insert_emoji: 'triggerInsertEmoji',
+    trigger_insert_embed: 'triggerInsertEmbed',
+    trigger_insert_pdf: 'triggerInsertPdf',
+    on_slash_command: 'triggerBlockTemplates',
+  }
+  function handleBridgeTrigger(method) {
+    const toolbarMethod = BRIDGE_TO_TOOLBAR[method]
+    toolbarRef.current?.[toolbarMethod]?.()
+  }
+
   if (!note) {
     return (
       <div className="flex h-full flex-1 flex-col items-center justify-center gap-2 text-fg-mute">
@@ -81,6 +100,7 @@ export default function NoteEditorWidget({ note }) {
         <TagChipsBar noteId={note.id} />
       </div>
       <EditorToolbar
+        ref={toolbarRef}
         editorRef={editorRef}
         ready={ready}
         noteId={note.id}
@@ -99,6 +119,7 @@ export default function NoteEditorWidget({ note }) {
           note={note}
           onReady={handleReady}
           onFindResult={(current, total) => setFindResult({ current, total })}
+          onBridgeTrigger={handleBridgeTrigger}
         />
       </div>
     </div>

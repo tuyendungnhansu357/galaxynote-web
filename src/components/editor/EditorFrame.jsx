@@ -69,7 +69,7 @@ function urlToDataUrl(url) {
  * Storage — that upload direction (web → Storage) is the next piece of
  * attachment work, not done in this pass.
  */
-const EditorFrame = forwardRef(function EditorFrame({ note, onReady, onFindResult }, ref) {
+const EditorFrame = forwardRef(function EditorFrame({ note, onReady, onFindResult, onBridgeTrigger }, ref) {
   const iframeRef = useRef(null)
   const readyRef = useRef(false)
   const saveTimerRef = useRef(null)
@@ -166,6 +166,22 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady, onFindResul
           // every time the match set or the current index changes.
           case 'on_find_result':
             onFindResult?.(args[0], args[1])
+            break
+
+          // The "/" slash-menu's Image/Link/Emoji/Embed/PDF/Block-Templates
+          // entries all go through window.bridge.trigger_* (desktop's
+          // Python _Bridge answers these directly). Relay to whichever
+          // toolbar method does the same insert as the matching toolbar
+          // button, so the slash-menu path and the toolbar-button path
+          // both land in one place instead of the slash-menu silently
+          // doing nothing (these method names weren't handled here before).
+          case 'trigger_insert_image':
+          case 'trigger_insert_link':
+          case 'trigger_insert_emoji':
+          case 'trigger_insert_embed':
+          case 'trigger_insert_pdf':
+          case 'on_slash_command':
+            onBridgeTrigger?.(method)
             break
 
           // Used by the editor's inline #tag highlighting (_loadTagsMap in
@@ -320,7 +336,7 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady, onFindResul
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [note, theme, postToIframe, respond, flushPendingSave, onReady, onFindResult])
+  }, [note, theme, postToIframe, respond, flushPendingSave, onReady, onFindResult, onBridgeTrigger])
 
   // When switching notes, push the new content in once the iframe is ready.
   useEffect(() => {

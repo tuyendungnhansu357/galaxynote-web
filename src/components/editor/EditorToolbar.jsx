@@ -1,12 +1,12 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
 import {
   Undo2, Redo2, Bold, Italic, Underline, Strikethrough,
   AlignLeft, AlignCenter, AlignRight, AlignJustify, Eraser, Paintbrush,
   Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare, ChevronRight,
   Table, Image as ImageIcon, Link as LinkIcon, Smile, Code, Quote, Lightbulb,
-  Video, Search, Columns3,
+  Video, Search, Columns3, FileText,
 } from 'lucide-react'
-import { uploadImageBlob } from '../../lib/attachments'
+import { uploadImageBlob, uploadPdfBlob } from '../../lib/attachments'
 
 const FONT_FAMILIES = [
   'Segoe UI', 'Arial', 'Calibri', 'Georgia', 'Times New Roman', 'Tahoma',
@@ -41,14 +41,27 @@ function Sep() {
  * `editorRef.current.exec(...)`, which forwards to `window.editorCmd.*`
  * inside the (unmodified) desktop editor iframe.
  *
- * Not ported yet (flagged, not silently missing): format painter drag-state,
- * block-template picker, wiki-link autocomplete, PDF embed. Find-in-note
- * (🔍) IS wired — see onToggleFind — and Columns is a new block type added
- * to editor_template.html itself, so it works identically on desktop too.
+ * The "/" slash-menu inside editor_template.html calls
+ * `window.bridge.trigger_insert_image()` etc. for Image/Link/Emoji/
+ * Embed/PDF/Block-Templates — same bridge-call mechanism as everything
+ * else, forwarded by bridge_shim.js. Desktop's Python `_Bridge` answers
+ * those directly; on web there's no Python side, so EditorFrame relays
+ * them here via onBridgeTrigger, and this component exposes matching
+ * trigger* methods through a ref so the same code path the toolbar
+ * buttons already use also runs when triggered from the slash-menu.
+ *
+ * Not ported yet (flagged, not silently missing): format painter
+ * drag-state, wiki-link autocomplete, and a real Block Templates picker
+ * (triggerBlockTemplates below tells the user this plainly instead of
+ * doing nothing).
  */
-export default function EditorToolbar({ editorRef, ready, noteId, onToggleFind, findOpen }) {
+const EditorToolbar = forwardRef(function EditorToolbar(
+  { editorRef, ready, noteId, onToggleFind, findOpen },
+  ref
+) {
   const [painterActive, setPainterActive] = useState(false)
   const fileInputRef = useRef(null)
+  const pdfInputRef = useRef(null)
 
   function exec(name, ...args) {
     editorRef.current?.exec(name, ...args)
@@ -112,9 +125,46 @@ export default function EditorToolbar({ editorRef, ready, noteId, onToggleFind, 
     reader.readAsDataURL(file)
   }
 
+  function handlePdfPick(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    ;(async () => {
+      try {
+        const relativePath = await uploadPdfBlob(file, noteId)
+        // insertPdfBlock(absPath, relPath, filename) — absPath is a plain
+        // object URL here (view-only for this session); the canonical copy
+        // lives in Supabase Storage at relPath, same as desktop's local
+        // file path convention, so re-opening the note re-resolves it via
+        // request_pdf_data like any PDF added from desktop.
+        exec('insertPdfBlock', URL.createObjectURL(file), relativePath, file.name)
+      } catch (err) {
+        console.warn('[attachments] PDF upload thất bại:', err)
+        window.alert('Không thể tải PDF lên — vui lòng thử lại.')
+      }
+    })()
+  }
+
+  function triggerBlockTemplates() {
+    // Real gap, told plainly rather than doing nothing: desktop's Block
+    // Templates picker (save/reuse a block as a reusable snippet) isn't
+    // built on web yet.
+    window.alert('Block Templates chưa được hỗ trợ trên bản Web — tính năng này hiện chỉ có trên bản Desktop.')
+  }
+
+  useImperativeHandle(ref, () => ({
+    triggerInsertImage: () => { exec('pinFocus'); fileInputRef.current?.click() },
+    triggerInsertLink: insertLink,
+    triggerInsertEmoji: insertEmoji,
+    triggerInsertEmbed: insertEmbed,
+    triggerInsertPdf: () => { exec('pinFocus'); pdfInputRef.current?.click() },
+    triggerBlockTemplates,
+  }))
+
   return (
     <div className="border-b border-line bg-panel">
       <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleImagePick} />
+      <input ref={pdfInputRef} type="file" accept="application/pdf" hidden onChange={handlePdfPick} />
 
       {/* Row 1 — text formatting */}
       <div className="flex items-center gap-0.5 overflow-x-auto px-2 py-1.5">
@@ -183,6 +233,7 @@ export default function EditorToolbar({ editorRef, ready, noteId, onToggleFind, 
         <ToolButton icon={Table} tip="Insert Table" onClick={() => exec('insertTable')} disabled={!ready} />
         <ToolButton icon={Columns3} tip="Insert Columns (2-5)" onClick={insertColumns} disabled={!ready} />
         <ToolButton icon={ImageIcon} tip="Insert Image" onClick={() => { exec('pinFocus'); fileInputRef.current?.click() }} disabled={!ready} />
+        <ToolButton icon={FileText} tip="Insert PDF" onClick={() => { exec('pinFocus'); pdfInputRef.current?.click() }} disabled={!ready} />
         <ToolButton icon={LinkIcon} tip="Insert Hyperlink" onClick={insertLink} disabled={!ready} />
         <ToolButton icon={Smile} tip="Insert Emoji" onClick={insertEmoji} disabled={!ready} />
         <Sep />
@@ -196,4 +247,6 @@ export default function EditorToolbar({ editorRef, ready, noteId, onToggleFind, 
       </div>
     </div>
   )
-}
+})
+
+export default EditorToolbar

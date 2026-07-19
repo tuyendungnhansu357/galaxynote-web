@@ -4632,6 +4632,20 @@ new QWebChannel(qt.webChannelTransport, function(ch){
 
   // ── Wheel scroll ──────────────────────────────────────────────────────────
   document.addEventListener('wheel', e=>{
+    // If the cursor is over an element with its own scrollable overflow
+    // (the "/" slash-menu, any dropdown/list popup) let the browser scroll
+    // THAT element natively instead of hijacking every wheel event on the
+    // page unconditionally. Previously this fired regardless of what was
+    // under the cursor, so scrolling over the slash-menu scrolled the note
+    // behind it instead of the menu's own item list.
+    let el = e.target;
+    while(el && el !== document.body){
+      const cs = getComputedStyle(el);
+      if((cs.overflowY==='auto'||cs.overflowY==='scroll') && el.scrollHeight > el.clientHeight){
+        return; // let native scroll handle this element
+      }
+      el = el.parentElement;
+    }
     e.preventDefault();
     window.scrollBy({top: e.deltaY * 1.2, behavior: 'instant'});
   }, {passive: false});

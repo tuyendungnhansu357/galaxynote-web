@@ -22,30 +22,29 @@ export function dataUrlToBlob(dataUrl) {
 }
 
 /**
- * Uploads an image blob to Supabase Storage and records it in the
- * `attachments` Postgres table — the exact same bucket/path convention
- * and table schema desktop's sync_manager.py::_push_attachments() uses
+ * Uploads any file blob to Supabase Storage and records it in the
+ * `attachments` Postgres table — the exact same bucket/path convention and
+ * table schema desktop's sync_manager.py::_push_attachments() uses
  * (`<user_id>/<relative_path>` in Storage, `relative_path` = `<note_id>/<uuid>.<ext>`
  * in the row). This is what makes desktop's own `_pull_attachments()` able
- * to discover and download images that were added from web, exactly as if
+ * to discover and download files that were added from web, exactly as if
  * another desktop instance had added them.
  *
- * Returns the `relative_path` to store in the image block's `local` field.
+ * Returns the `relative_path` to store in the block's `local` field.
  * Throws on failure — callers should catch and fall back to keeping the
- * image as an inline data: URL rather than losing it.
+ * file as an inline data: URL rather than losing it.
  */
-export async function uploadImageBlob(blob, noteId) {
+export async function uploadFileBlob(blob, noteId, ext) {
   const uid = useAuthStore.getState().user?.id
   if (!uid) throw new Error('Chưa đăng nhập')
   if (!noteId) throw new Error('Thiếu note_id')
 
-  const ext = EXT_BY_MIME[blob.type] || 'png'
   const relativePath = `${noteId}/${crypto.randomUUID()}.${ext}`
   const storagePath = `${uid}/${relativePath}`
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
-    .upload(storagePath, blob, { contentType: blob.type || 'image/png', upsert: false })
+    .upload(storagePath, blob, { contentType: blob.type || 'application/octet-stream', upsert: false })
   if (uploadError) throw uploadError
 
   const now = new Date().toISOString()
@@ -65,4 +64,15 @@ export async function uploadImageBlob(blob, noteId) {
   }
 
   return relativePath
+}
+
+/** Thin wrapper over uploadFileBlob for images — picks the extension from MIME type. */
+export async function uploadImageBlob(blob, noteId) {
+  const ext = EXT_BY_MIME[blob.type] || 'png'
+  return uploadFileBlob(blob, noteId, ext)
+}
+
+/** Thin wrapper over uploadFileBlob for PDFs. */
+export async function uploadPdfBlob(blob, noteId) {
+  return uploadFileBlob(blob, noteId, 'pdf')
 }
