@@ -1205,8 +1205,8 @@ function serializeContainer(c){
 function serialize(){ return JSON.stringify({v:4, blocks:serializeContainer(root)}); }
 
 // ── Load ─────────────────────────────────────────────────────────────────────
-function loadContainer(c, blocks){
-  c.innerHTML = '';
+function loadContainer(c, blocks, append){
+  if(!append) c.innerHTML = '';
   for(const b of blocks||[]){
     if(b.t==='pdf'){
       // Always reconstruct URL from rel path via bridge (port changes on restart)
@@ -3884,6 +3884,25 @@ const editorCmd = window.editorCmd = {
   /** Called by Python _do_save() to get fresh content synchronously.
    *  Unlike on_change (debounced 300ms), this always returns current DOM state. */
   getContent(){ return serialize(); },
+
+  // Appends a template's blocks to the END of the current content, WITHOUT
+  // going through setContent()/deserialize() — those clear the whole editor
+  // and reset _history to a single snapshot (fine for switching to a
+  // different note, wrong here: it silently destroyed whatever was on
+  // screen if the caller's own snapshot of "current content" was stale by
+  // even one keystroke, and it always nuked undo). This instead appends
+  // directly into the live DOM (loadContainer's new `append` flag skips the
+  // clear) and calls the normal notify(), which pushes ONE incremental undo
+  // step — so Ctrl+Z after inserting a template just removes the inserted
+  // blocks, same as any other insert command in this file.
+  insertTemplateBlocks(templateContentJson){
+    let blocks;
+    try { blocks = JSON.parse(templateContentJson).blocks || []; }
+    catch(e){ console.warn('[insertTemplateBlocks] bad JSON', e); return; }
+    if(!blocks.length) return;
+    loadContainer(root, blocks, true);
+    notify();
+  },
 };  // ← end of editorCmd
 
 // ══════════════════════════════════════════════════════════════════════════════

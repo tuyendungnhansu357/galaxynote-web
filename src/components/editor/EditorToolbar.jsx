@@ -152,23 +152,15 @@ const EditorToolbar = forwardRef(function EditorToolbar(
     })()
   }
 
-  // Web port of ui/note_editor.py::NoteEditorArea.insert_template() — same
-  // simple "append template's blocks to the end of current content" merge
-  // (desktop's own docstring says "at cursor position" but the actual code
-  // just concatenates; matched here for parity rather than "improving" on
-  // silently-different behavior).
+  // Web port of ui/note_editor.py::NoteEditorArea.insert_template() — appends
+  // the template's blocks to the end of current content. Desktop's own
+  // version does this via setContent() (full reload + undo-history reset),
+  // which is why desktop's Ctrl+Z can't undo a template insert either — on
+  // web this uses insertTemplateBlocks() instead, appending directly into
+  // the live DOM so undo works and existing content is never at risk from a
+  // stale getContent() snapshot.
   function insertTemplateContent(templateContentJson) {
-    try {
-      const data = JSON.parse(templateContentJson)
-      const blocks = data.blocks || []
-      if (!blocks.length) return
-      const curJson = exec('getContent') || '{"v":4,"blocks":[]}'
-      let curBlocks = []
-      try { curBlocks = JSON.parse(curJson).blocks || [] } catch { /* keep [] */ }
-      exec('setContent', JSON.stringify({ v: 4, blocks: [...curBlocks, ...blocks] }))
-    } catch (err) {
-      console.warn('[templates] insert thất bại:', err)
-    }
+    exec('insertTemplateBlocks', templateContentJson)
   }
 
   async function handleSaveAsTemplate({ name, icon, category, description }) {
