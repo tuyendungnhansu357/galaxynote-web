@@ -4,9 +4,13 @@ import {
   AlignLeft, AlignCenter, AlignRight, AlignJustify, Eraser, Paintbrush,
   Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare, ChevronRight,
   Table, Image as ImageIcon, Link as LinkIcon, Smile, Code, Quote, Lightbulb,
-  Video, Search, Columns3, FileText,
+  Video, Search, Columns3, FileText, ClipboardList,
 } from 'lucide-react'
 import { uploadImageBlob, uploadPdfBlob } from '../../lib/attachments'
+import { useTemplateStore } from '../../stores/templateStore'
+import TemplatePickerMenu from '../templates/TemplatePickerMenu'
+import SaveAsTemplateModal from '../templates/SaveAsTemplateModal'
+import TemplateManagerModal from '../templates/TemplateManagerModal'
 
 const FONT_FAMILIES = [
   'Segoe UI', 'Arial', 'Calibri', 'Georgia', 'Times New Roman', 'Tahoma',
@@ -51,9 +55,8 @@ function Sep() {
  * buttons already use also runs when triggered from the slash-menu.
  *
  * Not ported yet (flagged, not silently missing): format painter
- * drag-state, wiki-link autocomplete, and a real Block Templates picker
- * (triggerBlockTemplates below tells the user this plainly instead of
- * doing nothing).
+ * drag-state, wiki-link autocomplete. Block Templates (picker, manager,
+ * save-current) IS wired below — see triggerBlockTemplates.
  */
 const EditorToolbar = forwardRef(function EditorToolbar(
   { editorRef, ready, noteId, onToggleFind, findOpen },
@@ -62,6 +65,10 @@ const EditorToolbar = forwardRef(function EditorToolbar(
   const [painterActive, setPainterActive] = useState(false)
   const fileInputRef = useRef(null)
   const pdfInputRef = useRef(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [manageOpen, setManageOpen] = useState(false)
+  const [saveAsOpen, setSaveAsOpen] = useState(false)
+  const createTemplate = useTemplateStore((s) => s.createTemplate)
 
   function exec(name, ...args) {
     editorRef.current?.exec(name, ...args)
@@ -145,11 +152,32 @@ const EditorToolbar = forwardRef(function EditorToolbar(
     })()
   }
 
+  // Web port of ui/note_editor.py::NoteEditorArea.insert_template() — same
+  // simple "append template's blocks to the end of current content" merge
+  // (desktop's own docstring says "at cursor position" but the actual code
+  // just concatenates; matched here for parity rather than "improving" on
+  // silently-different behavior).
+  function insertTemplateContent(templateContentJson) {
+    try {
+      const data = JSON.parse(templateContentJson)
+      const blocks = data.blocks || []
+      if (!blocks.length) return
+      const curJson = exec('getContent') || '{"v":4,"blocks":[]}'
+      let curBlocks = []
+      try { curBlocks = JSON.parse(curJson).blocks || [] } catch { /* keep [] */ }
+      exec('setContent', JSON.stringify({ v: 4, blocks: [...curBlocks, ...blocks] }))
+    } catch (err) {
+      console.warn('[templates] insert thất bại:', err)
+    }
+  }
+
+  async function handleSaveAsTemplate({ name, icon, category, description }) {
+    const contentJson = exec('getContent') || '{"v":4,"blocks":[]}'
+    await createTemplate({ name, icon, category, description, content_json: contentJson })
+  }
+
   function triggerBlockTemplates() {
-    // Real gap, told plainly rather than doing nothing: desktop's Block
-    // Templates picker (save/reuse a block as a reusable snippet) isn't
-    // built on web yet.
-    window.alert('Block Templates chưa được hỗ trợ trên bản Web — tính năng này hiện chỉ có trên bản Desktop.')
+    setPickerOpen((v) => !v)
   }
 
   useImperativeHandle(ref, () => ({
@@ -244,7 +272,27 @@ const EditorToolbar = forwardRef(function EditorToolbar(
         <ToolButton icon={Code} tip="Code Block" onClick={() => exec('insertCodeBlock')} disabled={!ready} />
         <ToolButton icon={Quote} tip="Quote Block" onClick={() => exec('insertQuoteBlock')} disabled={!ready} />
         <ToolButton icon={Lightbulb} tip="Callout Block" onClick={() => exec('insertCallout', '💡', 'blue')} disabled={!ready} />
+        <Sep />
+
+        <div className="relative">
+          <ToolButton icon={ClipboardList} tip="Block Templates" onClick={triggerBlockTemplates} active={pickerOpen} disabled={!ready} />
+          {pickerOpen && (
+            <TemplatePickerMenu
+              onClose={() => setPickerOpen(false)}
+              onPick={insertTemplateContent}
+              onManage={() => setManageOpen(true)}
+              onSaveCurrent={() => setSaveAsOpen(true)}
+            />
+          )}
+        </div>
       </div>
+
+      {saveAsOpen && (
+        <SaveAsTemplateModal onClose={() => setSaveAsOpen(false)} onSave={handleSaveAsTemplate} />
+      )}
+      {manageOpen && (
+        <TemplateManagerModal onClose={() => setManageOpen(false)} onUseTemplate={insertTemplateContent} />
+      )}
     </div>
   )
 })

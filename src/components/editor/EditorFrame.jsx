@@ -69,7 +69,7 @@ function urlToDataUrl(url) {
  * Storage — that upload direction (web → Storage) is the next piece of
  * attachment work, not done in this pass.
  */
-const EditorFrame = forwardRef(function EditorFrame({ note, onReady, onFindResult, onBridgeTrigger }, ref) {
+const EditorFrame = forwardRef(function EditorFrame({ note, onReady, onFindResult, onBridgeTrigger, onContentChange }, ref) {
   const iframeRef = useRef(null)
   const readyRef = useRef(false)
   const saveTimerRef = useRef(null)
@@ -110,7 +110,7 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady, onFindResul
     exec(name, ...args) {
       const win = iframeRef.current?.contentWindow
       const fn = win?.editorCmd?.[name]
-      if (typeof fn === 'function') fn.apply(win.editorCmd, args)
+      if (typeof fn === 'function') return fn.apply(win.editorCmd, args)
     },
     // Escape hatch for the one command that isn't an editorCmd method
     // (heading uses document.execCommand, same as desktop's insert_heading).
@@ -194,9 +194,16 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady, onFindResul
 
           case 'on_change': {
             const json = args[0]
-            if (note) pendingSaveRef.current = { noteId: note.id, json }
-            if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-            saveTimerRef.current = setTimeout(flushPendingSave, AUTOSAVE_DELAY_MS)
+            if (onContentChange) {
+              // Standalone mode (e.g. Template Manager composing a
+              // template's content) — capture locally instead of
+              // autosaving to the real `notes` table.
+              onContentChange(json)
+            } else if (note) {
+              pendingSaveRef.current = { noteId: note.id, json }
+              if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+              saveTimerRef.current = setTimeout(flushPendingSave, AUTOSAVE_DELAY_MS)
+            }
             break
           }
 
@@ -336,7 +343,7 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady, onFindResul
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [note, theme, postToIframe, respond, flushPendingSave, onReady, onFindResult, onBridgeTrigger])
+  }, [note, theme, postToIframe, respond, flushPendingSave, onReady, onFindResult, onBridgeTrigger, onContentChange])
 
   // When switching notes, push the new content in once the iframe is ready.
   useEffect(() => {

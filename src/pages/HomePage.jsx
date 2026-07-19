@@ -8,12 +8,14 @@ import HomeDashboard from '../components/home/HomeDashboard'
 import { useNotes } from '../hooks/useNotes'
 import { useTags } from '../hooks/useTags'
 import { useLinks } from '../hooks/useLinks'
+import { useTemplates } from '../hooks/useTemplates'
 
 export default function HomePage() {
   const navigate = useNavigate()
   const { notes, activeNoteId, setActiveNoteId } = useNotes()
   const { noteTags } = useTags()
   useLinks()
+  useTemplates()
   const [activeTagId, setActiveTagId] = useState(null)
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [backlinksVisible, setBacklinksVisible] = useState(false)
