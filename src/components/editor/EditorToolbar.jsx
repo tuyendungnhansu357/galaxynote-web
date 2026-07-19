@@ -66,6 +66,7 @@ const EditorToolbar = forwardRef(function EditorToolbar(
   const fileInputRef = useRef(null)
   const pdfInputRef = useRef(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const templateBtnRef = useRef(null)
   const [manageOpen, setManageOpen] = useState(false)
   const [saveAsOpen, setSaveAsOpen] = useState(false)
   const createTemplate = useTemplateStore((s) => s.createTemplate)
@@ -266,10 +267,11 @@ const EditorToolbar = forwardRef(function EditorToolbar(
         <ToolButton icon={Lightbulb} tip="Callout Block" onClick={() => exec('insertCallout', '💡', 'blue')} disabled={!ready} />
         <Sep />
 
-        <div className="relative">
+        <div className="relative" ref={templateBtnRef}>
           <ToolButton icon={ClipboardList} tip="Block Templates" onClick={triggerBlockTemplates} active={pickerOpen} disabled={!ready} />
           {pickerOpen && (
             <TemplatePickerMenu
+              anchorRef={templateBtnRef}
               onClose={() => setPickerOpen(false)}
               onPick={insertTemplateContent}
               onManage={() => setManageOpen(true)}

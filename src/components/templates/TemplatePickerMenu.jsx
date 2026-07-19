@@ -1,33 +1,76 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Settings, Save } from 'lucide-react'
 import { useTemplateStore, CATEGORY_LABELS, CATEGORY_ORDER } from '../../stores/templateStore'
 
 // Web port of ui/note_editor.py::_open_template_picker() — categorized
 // quick-insert list, plus "Manage Templates…" and "Save current as
 // Template…" at the bottom. Triggered from the toolbar's 📋 button AND
-// from the "/" slash-menu's "Block Templates" entry (both call the same
+// from the "/" slash-menu's "Block Templates" entry (both call
 // EditorToolbar.triggerBlockTemplates(), which opens this).
-export default function TemplatePickerMenu({ onClose, onPick, onManage, onSaveCurrent }) {
+//
+// Rendered through a portal to document.body with position:fixed, computed
+// from `anchorRef`'s on-screen position. It used to render as a plain
+// position:absolute child inside the toolbar's button row — that row has
+// overflow-x-auto (added so toolbar buttons scroll into view instead of
+// getting clipped on narrow windows), and per the CSS overflow spec,
+// setting overflow-x to anything but visible makes overflow-y compute to
+// auto too. That silently clipped this dropdown at the row's own bottom
+// edge, so it was invisible/inert instead of "underneath" the note as
+// such — a portal escapes that ancestor's clipping entirely.
+export default function TemplatePickerMenu({ anchorRef, onClose, onPick, onManage, onSaveCurrent }) {
   const { templates } = useTemplateStore()
-  const ref = useRef(null)
+  const menuRef = useRef(null)
+  const [pos, setPos] = useState(null)
+
+  useLayoutEffect(() => {
+    function place() {
+      const r = anchorRef.current?.getBoundingClientRect()
+      if (!r) return
+      const menuWidth = 288 // w-72
+      // Prefer opening below the button; flip above if it would overflow
+      // the bottom of the viewport. Clamp horizontally so it never runs
+      // off the right edge either.
+      const spaceBelow = window.innerHeight - r.bottom
+      const openUp = spaceBelow < 320 && r.top > 320
+      setPos({
+        left: Math.min(r.left, window.innerWidth - menuWidth - 8),
+        top: openUp ? undefined : r.bottom + 6,
+        bottom: openUp ? window.innerHeight - r.top + 6 : undefined,
+      })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [anchorRef])
 
   useEffect(() => {
     function onClickOutside(e) {
-      if (ref.current && !ref.current.contains(e.target)) onClose()
+      if (
+        menuRef.current && !menuRef.current.contains(e.target) &&
+        anchorRef.current && !anchorRef.current.contains(e.target)
+      ) onClose()
     }
     document.addEventListener('mousedown', onClickOutside)
     return () => document.removeEventListener('mousedown', onClickOutside)
-  }, [onClose])
+  }, [onClose, anchorRef])
+
+  if (!pos) return null
 
   const byCategory = {}
   for (const t of templates) {
     ;(byCategory[t.category] ??= []).push(t)
   }
 
-  return (
+  return createPortal(
     <div
-      ref={ref}
-      className="absolute left-0 top-full z-30 mt-1.5 max-h-96 w-72 overflow-y-auto rounded-lg border border-line bg-panel p-1.5 shadow-xl"
+      ref={menuRef}
+      style={{ position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom }}
+      className="z-[200] max-h-96 w-72 overflow-y-auto rounded-lg border border-line-2 bg-panel p-1.5 shadow-2xl"
     >
       <p className="px-2 py-1.5 text-xs font-semibold text-star">📋 Chọn Template</p>
 
@@ -72,6 +115,7 @@ export default function TemplatePickerMenu({ onClose, onPick, onManage, onSaveCu
       >
         <Save size={14} /> Lưu nội dung hiện tại làm Template…
       </button>
-    </div>
+    </div>,
+    document.body
   )
 }
