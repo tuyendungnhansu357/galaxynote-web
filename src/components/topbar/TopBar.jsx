@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Home, Plus, CalendarDays, Link2, FileUp, Orbit,
+  Home, Plus, CalendarDays, Link2, FileUp, FileCode, Orbit,
   PanelLeftClose, PanelLeft, BookOpen, Sun, Moon, Tags,
 } from 'lucide-react'
 import MenuDropdown from './MenuDropdown'
 import ImportUrlModal from './ImportUrlModal'
 import ImportMdModal from './ImportMdModal'
+import ImportHtmlModal from './ImportHtmlModal'
 import SettingsModal from './SettingsModal'
 import TagManagerModal from '../sidebar/TagManagerModal'
 import GuideModal from '../help/GuideModal'
@@ -37,6 +38,7 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
   const { createTag } = useTagStore()
   const [importUrlOpen, setImportUrlOpen] = useState(false)
   const [importMdOpen, setImportMdOpen] = useState(false)
+  const [importHtmlOpen, setImportHtmlOpen] = useState(false)
   const [tagManagerOpen, setTagManagerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
@@ -90,6 +92,7 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
             null,
             { label: 'Import URL…', onClick: () => setImportUrlOpen(true) },
             { label: 'Import Markdown…', onClick: () => setImportMdOpen(true) },
+            { label: 'Import HTML…', onClick: () => setImportHtmlOpen(true) },
             null,
             { label: 'Export Markdown (.md)', disabled: !activeNote, onClick: () => downloadNoteAsMarkdown(activeNote) },
             { label: 'Export HTML (.html)', disabled: !activeNote, onClick: () => downloadNoteAsHtml(activeNote) },
@@ -177,6 +180,12 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
         >
           <FileUp size={13} /> Import MD
         </button>
+        <button
+          onClick={() => setImportHtmlOpen(true)}
+          className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-dim hover:bg-panel-2"
+        >
+          <FileCode size={13} /> Import HTML
+        </button>
 
         <div className="mx-1 h-5 w-px bg-line" />
 
@@ -214,6 +223,7 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
 
       {importUrlOpen && <ImportUrlModal onClose={() => setImportUrlOpen(false)} onImported={handleImported} />}
       {importMdOpen && <ImportMdModal onClose={() => setImportMdOpen(false)} onImported={handleImported} />}
+      {importHtmlOpen && <ImportHtmlModal onClose={() => setImportHtmlOpen(false)} onImported={handleImported} />}
       {tagManagerOpen && <TagManagerModal onClose={() => setTagManagerOpen(false)} />}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {guideOpen && <GuideModal onClose={() => setGuideOpen(false)} />}

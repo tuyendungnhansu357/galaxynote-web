@@ -1,7 +1,11 @@
-// Web port of core/export.py. Conversion rules match exactly (including
-// the "just strip HTML tags, don't try to preserve bold/italic as
-// markdown" choice from utils.helpers.strip_html) so a note exported from
-// web and one exported from desktop look the same.
+// exportNoteMarkdown below still matches core/export.py's Markdown output
+// exactly (lossy by design — Markdown can't represent nested toggles,
+// checkboxes, callouts, etc., so this stays a "quick text dump", same on
+// both platforms). HTML export is DIFFERENT from desktop's core/export.py
+// on purpose now — see htmlExport.js for why (that file goes through
+// Markdown too, throwing away nearly all formatting before it even reaches
+// HTML). downloadNoteAsHtml below uses the new rich exporter instead.
+import { exportNoteHtmlRich } from './htmlExport'
 
 function stripHtml(html) {
   return (html || '').replace(/<[^>]+>/g, '')
@@ -63,25 +67,6 @@ export function exportNoteMarkdown(note) {
   return lines.join('\n')
 }
 
-export function exportNoteHtml(note, styled = true) {
-  const md = exportNoteMarkdown(note)
-  let html = md
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
-  html = html
-    .split('\n')
-    .map((line) => (line.trim() && !line.startsWith('<') ? `<p>${line}</p>` : line))
-    .join('\n')
-
-  if (styled) {
-    return `<!DOCTYPE html><html><head><meta charset="utf-8">
-<style>body{font-family:sans-serif;max-width:800px;margin:40px auto;color:#222;line-height:1.7}</style></head><body>${html}</body></html>`
-  }
-  return html
-}
-
 export function downloadTextFile(filename, content, mime = 'text/plain;charset=utf-8') {
   const blob = new Blob([content], { type: mime })
   const url = URL.createObjectURL(blob)
@@ -102,6 +87,7 @@ export function downloadNoteAsMarkdown(note) {
   downloadTextFile(`${safeFilename(note.title)}.md`, exportNoteMarkdown(note), 'text/markdown;charset=utf-8')
 }
 
-export function downloadNoteAsHtml(note) {
-  downloadTextFile(`${safeFilename(note.title)}.html`, exportNoteHtml(note), 'text/html;charset=utf-8')
+export async function downloadNoteAsHtml(note) {
+  const html = await exportNoteHtmlRich(note)
+  downloadTextFile(`${safeFilename(note.title)}.html`, html, 'text/html;charset=utf-8')
 }
