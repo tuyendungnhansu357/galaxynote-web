@@ -55,8 +55,16 @@ export default function TemplatePickerMenu({ anchorRef, onClose, onPick, onManag
         anchorRef.current && !anchorRef.current.contains(e.target)
       ) onClose()
     }
+    // Same fix as MenuDropdown: a click inside the note's <iframe> never
+    // bubbles to this document, so onClickOutside alone can't see it —
+    // window fires 'blur' when focus moves into the iframe instead.
+    function onWindowBlur() { onClose() }
     document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
+    window.addEventListener('blur', onWindowBlur)
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside)
+      window.removeEventListener('blur', onWindowBlur)
+    }
   }, [onClose, anchorRef])
 
   if (!pos) return null

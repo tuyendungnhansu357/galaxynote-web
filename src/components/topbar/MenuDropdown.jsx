@@ -14,11 +14,19 @@ export default function MenuDropdown({ label, items }) {
       if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false)
     }
     function onKey(e) { if (e.key === 'Escape') setOpen(false) }
+    // Clicking inside the note's <iframe> is a click in a SEPARATE document
+    // — it never bubbles up to this page's document, so onDocClick alone
+    // never fires for it and the menu stayed open. The browser does fire
+    // `blur` on the parent `window` the instant focus moves into the
+    // iframe though, so that's what actually closes the menu in that case.
+    function onWindowBlur() { setOpen(false) }
     document.addEventListener('mousedown', onDocClick)
     document.addEventListener('keydown', onKey)
+    window.addEventListener('blur', onWindowBlur)
     return () => {
       document.removeEventListener('mousedown', onDocClick)
       document.removeEventListener('keydown', onKey)
+      window.removeEventListener('blur', onWindowBlur)
     }
   }, [open])
 

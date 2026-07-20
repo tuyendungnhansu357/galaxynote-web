@@ -23,11 +23,17 @@ export default function TagChipsBar({ noteId }) {
       if (rootRef.current && !rootRef.current.contains(e.target)) { setPickerOpen(false); setQuery('') }
     }
     function onKey(e) { if (e.key === 'Escape') { setPickerOpen(false); setQuery('') } }
+    // Same fix as MenuDropdown: a click inside the note's <iframe> never
+    // bubbles to this document, so onDocClick alone can't see it — window
+    // fires 'blur' when focus moves into the iframe instead.
+    function onWindowBlur() { setPickerOpen(false); setQuery('') }
     document.addEventListener('mousedown', onDocClick)
     document.addEventListener('keydown', onKey)
+    window.addEventListener('blur', onWindowBlur)
     return () => {
       document.removeEventListener('mousedown', onDocClick)
       document.removeEventListener('keydown', onKey)
+      window.removeEventListener('blur', onWindowBlur)
     }
   }, [pickerOpen])
 

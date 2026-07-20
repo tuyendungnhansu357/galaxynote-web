@@ -8,6 +8,7 @@ import MenuDropdown from './MenuDropdown'
 import ImportUrlModal from './ImportUrlModal'
 import ImportMdModal from './ImportMdModal'
 import ImportHtmlModal from './ImportHtmlModal'
+import CleanupImagesModal from './CleanupImagesModal'
 import SettingsModal from './SettingsModal'
 import TagManagerModal from '../sidebar/TagManagerModal'
 import GuideModal from '../help/GuideModal'
@@ -39,6 +40,7 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
   const [importUrlOpen, setImportUrlOpen] = useState(false)
   const [importMdOpen, setImportMdOpen] = useState(false)
   const [importHtmlOpen, setImportHtmlOpen] = useState(false)
+  const [cleanupOpen, setCleanupOpen] = useState(false)
   const [tagManagerOpen, setTagManagerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
@@ -96,6 +98,8 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
             null,
             { label: 'Export Markdown (.md)', disabled: !activeNote, onClick: () => downloadNoteAsMarkdown(activeNote) },
             { label: 'Export HTML (.html)', disabled: !activeNote, onClick: () => downloadNoteAsHtml(activeNote) },
+            null,
+            { label: '🗑  Dọn ảnh đã import…', onClick: () => setCleanupOpen(true) },
           ]}
         />
         <MenuDropdown
@@ -224,6 +228,7 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
       {importUrlOpen && <ImportUrlModal onClose={() => setImportUrlOpen(false)} onImported={handleImported} />}
       {importMdOpen && <ImportMdModal onClose={() => setImportMdOpen(false)} onImported={handleImported} />}
       {importHtmlOpen && <ImportHtmlModal onClose={() => setImportHtmlOpen(false)} onImported={handleImported} />}
+      {cleanupOpen && <CleanupImagesModal onClose={() => setCleanupOpen(false)} />}
       {tagManagerOpen && <TagManagerModal onClose={() => setTagManagerOpen(false)} />}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {guideOpen && <GuideModal onClose={() => setGuideOpen(false)} />}
