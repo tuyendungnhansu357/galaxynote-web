@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
-import { X, Plus, Trash2, Orbit, Combine } from 'lucide-react'
+import { X, Plus, Trash2, Orbit, Combine, Wand2 } from 'lucide-react'
 import { useTagStore } from '../../stores/tagStore'
+import { useTaskStore } from '../../stores/taskStore'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
 
@@ -14,13 +15,14 @@ const PRESET_COLORS = [
 ]
 
 export default function TagManagerModal({ onClose }) {
-  const { tags, relations, createTag, updateTag, deleteTag, addRelation, removeRelation, mergeTags } = useTagStore()
+  const { tags, relations, noteTags, createTag, updateTag, deleteTag, addRelation, removeRelation, mergeTags, mergeDuplicateTags } = useTagStore()
   const [selectedId, setSelectedId] = useState(tags[0]?.id ?? null)
   const [draft, setDraft] = useState(null) // local edit buffer, null = viewing selected as-is
   const [addParentId, setAddParentId] = useState('')
   const [addChildId, setAddChildId] = useState('')
   const [mergeTargetId, setMergeTargetId] = useState('')
   const [merging, setMerging] = useState(false)
+  const [dedupeRunning, setDedupeRunning] = useState(false)
 
   const selected = tags.find((t) => t.id === selectedId) ?? null
   const form = draft ?? selected
@@ -33,7 +35,15 @@ export default function TagManagerModal({ onClose }) {
     () => (selectedId ? relations.filter((r) => r.parent_id === selectedId).map((r) => tags.find((t) => t.id === r.child_id)).filter(Boolean) : []),
     [relations, tags, selectedId]
   )
-  const noteCount = 0 // TODO: wire to a real count once note_tags is indexed by tag on this page
+  const noteCount = useMemo(
+    () => (selectedId ? noteTags.filter((nt) => nt.tag_id === selectedId).length : 0),
+    [noteTags, selectedId]
+  )
+  const tasks = useTaskStore((s) => s.tasks)
+  const taskCount = useMemo(
+    () => (selectedId ? tasks.filter((t) => t.tag_id === selectedId).length : 0),
+    [tasks, selectedId]
+  )
 
   function select(id) {
     setSelectedId(id)
@@ -47,6 +57,13 @@ export default function TagManagerModal({ onClose }) {
   async function handleNewTag() {
     const tag = await createTag({ name: 'tag-moi' })
     if (tag) select(tag.id)
+  }
+
+  async function handleDedupe() {
+    setDedupeRunning(true)
+    const count = await mergeDuplicateTags()
+    setDedupeRunning(false)
+    alert(count > 0 ? `Đã gộp ${count} tag trùng tên.` : 'Không tìm thấy tag nào trùng tên.')
   }
 
   async function handleSave() {
@@ -115,9 +132,12 @@ export default function TagManagerModal({ onClose }) {
               </li>
             ))}
           </ul>
-          <div className="border-t border-line p-2">
+          <div className="border-t border-line p-2 space-y-1.5">
             <Button variant="outline" onClick={handleNewTag} className="w-full">
               <Plus size={14} /> Tag mới
+            </Button>
+            <Button variant="outline" onClick={handleDedupe} loading={dedupeRunning} className="w-full">
+              <Wand2 size={14} /> Dọn tag trùng tên
             </Button>
           </div>
         </div>
@@ -183,6 +203,8 @@ export default function TagManagerModal({ onClose }) {
                 <Orbit size={14} className="text-star" />
                 Space tag (hành tinh trung tâm trong Galaxy)
               </label>
+
+              <p className="text-xs text-fg-mute">{noteCount} note, {taskCount} task</p>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

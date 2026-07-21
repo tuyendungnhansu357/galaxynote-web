@@ -35,11 +35,22 @@ export const useTagStore = create((set, get) => ({
   createTag: async ({ name, color = '#4f8ef7', icon = '', description = '', is_space = false }) => {
     const uid = userId()
     if (!uid) return null
+    const normalizedName = name.trim().toLowerCase().replace(/\s+/g, '-')
+
+    // Tag.name is UNIQUE at the DB level on desktop's SQLite schema, so a
+    // duplicate name is physically impossible there. Supabase/Postgres
+    // doesn't enforce that here, so without this check, two clicks of
+    // "Tag mới" (or the same #hashtag typed twice) would silently fork
+    // into two separate tag rows sharing one name. Treat a name match as
+    // "this is the same tag" and reuse it instead of inserting a new row.
+    const existing = get().tags.find((t) => t.name === normalizedName)
+    if (existing) return existing
+
     const now = new Date().toISOString()
     const row = {
       id: crypto.randomUUID(),
       user_id: uid,
-      name: name.trim().toLowerCase().replace(/\s+/g, '-'),
+      name: normalizedName,
       color,
       icon,
       description,
@@ -57,6 +68,20 @@ export const useTagStore = create((set, get) => ({
 
   // patch may include: name, color, icon, description, is_space, sort_order
   updateTag: async (tagId, patch) => {
+    if (typeof patch.name === 'string') {
+      const normalizedName = patch.name.trim().toLowerCase().replace(/\s+/g, '-')
+      patch = { ...patch, name: normalizedName }
+
+      // Renaming onto a name another (different) tag already has. Rather
+      // than let two active tags share a name — or hit a unique-constraint
+      // error if one gets added later — fold this tag into the existing
+      // one, same as picking it in the "Gộp tag này vào tag khác" panel.
+      const collision = get().tags.find((t) => t.id !== tagId && t.name === normalizedName)
+      if (collision) {
+        const ok = await get().mergeTags(tagId, collision.id)
+        return ok ? collision : null
+      }
+    }
     const now = new Date().toISOString()
     const { data, error } = await supabase
       .from('tags')
@@ -233,5 +258,28 @@ export const useTagStore = create((set, get) => ({
       activeTagId: get().activeTagId === sourceId ? targetId : get().activeTagId,
     })
     return true
+  },
+
+  // One-time cleanup for duplicate-name tags that already exist from
+  // before createTag/updateTag started preventing new ones — groups
+  // active tags by exact name (already normalized on write) and merges
+  // every extra one into the oldest of each group.
+  mergeDuplicateTags: async () => {
+    const groups = new Map()
+    for (const t of get().tags) {
+      if (!groups.has(t.name)) groups.set(t.name, [])
+      groups.get(t.name).push(t)
+    }
+    let merged = 0
+    for (const group of groups.values()) {
+      if (group.length < 2) continue
+      const [keep, ...dupes] = [...group].sort(
+        (a, b) => new Date(a.created_at) - new Date(b.created_at)
+      )
+      for (const dupe of dupes) {
+        if (await get().mergeTags(dupe.id, keep.id)) merged += 1
+      }
+    }
+    return merged
   },
 }))
