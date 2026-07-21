@@ -94,9 +94,6 @@ export const useNoteStore = create((set, get) => ({
 
   togglePin: async (noteId, isPinned) => get().updateNote(noteId, { is_pinned: isPinned }),
 
-  // Mirrors desktop core/note_manager.py::archive_note().
-  toggleArchive: async (noteId, isArchived) => get().updateNote(noteId, { is_archived: isArchived }),
-
   // Mirrors desktop note_manager.get_daily_note(): find today's daily note
   // by `daily_date`, or create it if this is the first time today.
   getOrCreateDailyNote: async () => {

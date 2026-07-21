@@ -1,8 +1,8 @@
-import { Pin, Trash2, FileText, Archive, ArchiveRestore } from 'lucide-react'
+import { Pin, Trash2, FileText } from 'lucide-react'
 import { useNoteStore } from '../../stores/noteStore'
 
 export default function NoteList({ notes, activeNoteId, onSelect }) {
-  const { togglePin, toggleArchive, deleteNote } = useNoteStore()
+  const { togglePin, deleteNote } = useNoteStore()
 
   if (!notes.length) {
     return (
@@ -32,15 +32,6 @@ export default function NoteList({ notes, activeNoteId, onSelect }) {
               title={n.is_pinned ? 'Bỏ ghim' : 'Ghim note'}
             >
               <Pin size={12} />
-            </span>
-            <span
-              role="button"
-              tabIndex={-1}
-              onClick={(e) => { e.stopPropagation(); toggleArchive(n.id, !n.is_archived) }}
-              className="hidden shrink-0 rounded p-1 text-fg-mute hover:text-fg group-hover:inline-flex"
-              title={n.is_archived ? 'Bỏ lưu trữ' : 'Lưu trữ note'}
-            >
-              {n.is_archived ? <ArchiveRestore size={12} /> : <Archive size={12} />}
             </span>
             <span
               role="button"

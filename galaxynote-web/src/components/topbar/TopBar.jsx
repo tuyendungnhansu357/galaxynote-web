@@ -8,7 +8,6 @@ import MenuDropdown from './MenuDropdown'
 import ImportUrlModal from './ImportUrlModal'
 import ImportMdModal from './ImportMdModal'
 import ImportHtmlModal from './ImportHtmlModal'
-import ExportAllModal from './ExportAllModal'
 import CleanupImagesModal from './CleanupImagesModal'
 import SettingsModal from './SettingsModal'
 import TagManagerModal from '../sidebar/TagManagerModal'
@@ -41,7 +40,6 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
   const [importUrlOpen, setImportUrlOpen] = useState(false)
   const [importMdOpen, setImportMdOpen] = useState(false)
   const [importHtmlOpen, setImportHtmlOpen] = useState(false)
-  const [exportAllOpen, setExportAllOpen] = useState(false)
   const [cleanupOpen, setCleanupOpen] = useState(false)
   const [tagManagerOpen, setTagManagerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -100,9 +98,6 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
             null,
             { label: 'Export Markdown (.md)', disabled: !activeNote, onClick: () => downloadNoteAsMarkdown(activeNote) },
             { label: 'Export HTML (.html)', disabled: !activeNote, onClick: () => downloadNoteAsHtml(activeNote) },
-            null,
-            { label: 'Export All Notes…', onClick: () => setExportAllOpen(true) },
-            { label: 'Export theo Tag…', onClick: () => setExportAllOpen(true) },
             null,
             { label: '🗑  Dọn ảnh đã import…', onClick: () => setCleanupOpen(true) },
           ]}
@@ -233,7 +228,6 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
       {importUrlOpen && <ImportUrlModal onClose={() => setImportUrlOpen(false)} onImported={handleImported} />}
       {importMdOpen && <ImportMdModal onClose={() => setImportMdOpen(false)} onImported={handleImported} />}
       {importHtmlOpen && <ImportHtmlModal onClose={() => setImportHtmlOpen(false)} onImported={handleImported} />}
-      {exportAllOpen && <ExportAllModal onClose={() => setExportAllOpen(false)} />}
       {cleanupOpen && <CleanupImagesModal onClose={() => setCleanupOpen(false)} />}
       {tagManagerOpen && <TagManagerModal onClose={() => setTagManagerOpen(false)} />}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}

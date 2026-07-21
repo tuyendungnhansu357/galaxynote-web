@@ -11,7 +11,7 @@ import { useAuthStore } from '../stores/authStore'
 function collectTaskBlocks(blocks, out) {
   for (const b of blocks ?? []) {
     if (b.t === 'task' && b.block_id) {
-      out.push({ block_id: b.block_id, content: b.html || '', is_done: !!b.done, due: b.due || null })
+      out.push({ block_id: b.block_id, content: b.html || '', is_done: !!b.done })
     }
     if (Array.isArray(b.children)) collectTaskBlocks(b.children, out)
   }
@@ -48,7 +48,7 @@ export async function syncTasksFromContent(noteId, contentJson) {
 
   const { data: existing, error } = await supabase
     .from('tasks')
-    .select('id,block_id,content,is_done,sort_order,due_date,is_deleted')
+    .select('id,block_id,content,is_done,sort_order,is_deleted')
     .eq('user_id', uid)
     .eq('note_id', noteId)
   if (error) { console.error('[tasks] fetch existing failed:', error); return false }
@@ -60,13 +60,12 @@ export async function syncTasksFromContent(noteId, contentJson) {
   for (const [blockId, t] of incomingByBlockId) {
     const ex = existingByBlockId.get(blockId)
     if (ex) {
-      const unchanged = !ex.is_deleted && ex.content === t.content && ex.is_done === t.is_done
-        && ex.sort_order === t.sort_order && (ex.due_date || null) === (t.due || null)
+      const unchanged = !ex.is_deleted && ex.content === t.content && ex.is_done === t.is_done && ex.sort_order === t.sort_order
       if (unchanged) continue
       ops.push(
         supabase.from('tasks').update({
           content: t.content, is_done: t.is_done, sort_order: t.sort_order,
-          due_date: t.due || null, is_deleted: false, updated_at: now,
+          is_deleted: false, updated_at: now,
         }).eq('id', ex.id)
       )
     } else {
@@ -74,7 +73,7 @@ export async function syncTasksFromContent(noteId, contentJson) {
         supabase.from('tasks').insert({
           id: crypto.randomUUID(), user_id: uid, note_id: noteId, block_id: blockId,
           content: t.content, is_done: t.is_done, sort_order: t.sort_order,
-          due_date: t.due || null, tag_id: null, is_deleted: false, updated_at: now,
+          due_date: null, tag_id: null, is_deleted: false, updated_at: now,
         })
       )
     }

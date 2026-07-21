@@ -6,14 +6,12 @@ import FindBar from './FindBar'
 import TagChipsBar from './TagChipsBar'
 import { useNoteStore } from '../../stores/noteStore'
 import { useActiveEditorStore } from '../../stores/activeEditorStore'
-import { countWordsAndChars } from '../../lib/wordCount'
 
 export default function NoteEditorWidget({ note }) {
   const [title, setTitle] = useState(note?.title ?? '')
   const [ready, setReady] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
   const [findResult, setFindResult] = useState({ current: 0, total: 0 })
-  const [wordCount, setWordCount] = useState({ words: 0, chars: 0 })
   const updateNote = useNoteStore((s) => s.updateNote)
   const titleTimer = useRef(null)
   const editorRef = useRef(null)
@@ -26,9 +24,6 @@ export default function NoteEditorWidget({ note }) {
   useEffect(() => { setReady(false) }, [note?.id])
   // Find bar doesn't carry over to a different note.
   useEffect(() => { setFindOpen(false); setFindResult({ current: 0, total: 0 }) }, [note?.id])
-  // Word count from the note's saved content — refreshed live from the
-  // editor's own on_change (see handleWordCount below) once the user edits.
-  useEffect(() => { setWordCount(countWordsAndChars(note?.content)) }, [note?.id, note?.content])
 
   // Ctrl+F toggles the find bar — matches desktop's
   // sc_find = QShortcut(QKeySequence("Ctrl+F"), self) in note_editor.py.
@@ -125,14 +120,8 @@ export default function NoteEditorWidget({ note }) {
           onReady={handleReady}
           onFindResult={(current, total) => setFindResult({ current, total })}
           onBridgeTrigger={handleBridgeTrigger}
-          onWordCount={setWordCount}
         />
       </div>
-      {wordCount.words > 0 && (
-        <div className="border-t border-line px-8 py-1 text-right text-[11px] text-fg-mute">
-          {wordCount.words.toLocaleString('vi-VN')} từ · {wordCount.chars.toLocaleString('vi-VN')} ký tự
-        </div>
-      )}
     </div>
   )
 }

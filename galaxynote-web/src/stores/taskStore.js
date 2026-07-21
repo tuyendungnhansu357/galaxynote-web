@@ -41,27 +41,4 @@ export const useTaskStore = create((set, get) => ({
     set({ tasks: get().tasks.map((t) => (t.id === taskId ? data : t)) })
     return true
   },
-
-  // Web equivalent of desktop's _Bridge.on_task_set_due (ui/note_editor.py):
-  // the editor's task right-click "set due date" menu calls
-  // bridge.on_task_set_due(blockId, dateStr) directly, independent of the
-  // on_change autosave path (which also carries the `due` field in the
-  // block JSON and gets picked up by lib/tasks.js::syncTasksFromContent on
-  // the next save — same double-write pattern as desktop).
-  setDueDateByBlockId: async (noteId, blockId, dateStr) => {
-    const uid = userId()
-    if (!uid || !noteId || !blockId) return false
-    const now = new Date().toISOString()
-    const { data, error } = await supabase
-      .from('tasks')
-      .update({ due_date: dateStr || null, updated_at: now })
-      .eq('user_id', uid)
-      .eq('note_id', noteId)
-      .eq('block_id', blockId)
-      .select()
-      .maybeSingle()
-    if (error) { set({ error: error.message }); return false }
-    if (data) set({ tasks: get().tasks.map((t) => (t.id === data.id ? data : t)) })
-    return true
-  },
 }))

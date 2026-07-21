@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Plus, Search, LogOut, Settings2, Clock, Pin, CalendarDays, Orbit, Files, Archive } from 'lucide-react'
+import { Plus, Search, LogOut, Settings2, Clock, Pin, CalendarDays, Orbit, Files } from 'lucide-react'
 import { useNoteStore } from '../../stores/noteStore'
 import { useAuthStore } from '../../stores/authStore'
 import { useTagStore } from '../../stores/tagStore'
@@ -18,38 +18,28 @@ const QUICK_FILTERS = [
   { key: 'pinned', label: 'Pinned', icon: Pin },
   { key: 'daily', label: 'Daily', icon: CalendarDays },
   { key: 'orphans', label: 'Orphans', icon: Orbit },
-  { key: 'archived', label: 'Đã lưu trữ', icon: Archive },
 ]
 
 // Web port of core/note_manager.py's get_recent_notes / get_pinned_notes /
 // get_orphan_notes (no-tags-assigned) / daily-notes filter.
-//
-// Desktop's own quick filters (and get_all_notes()'s default
-// include_archived=False) never surface archived notes at all — with no
-// dedicated "Archived" view either, so there's no way back short of
-// remembering which note it was. The 'archived' filter here is a small,
-// deliberate improvement over desktop rather than a literal port: it's the
-// only place a user can find a note again to unarchive it.
 function applyQuickFilter(notes, key, noteTags) {
-  if (key === 'archived') return notes.filter((n) => n.is_archived)
-  const visible = notes.filter((n) => !n.is_archived)
   switch (key) {
     case 'recent':
-      return [...visible]
+      return [...notes]
         .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
         .slice(0, RECENT_LIMIT)
     case 'pinned':
-      return visible.filter((n) => n.is_pinned)
+      return notes.filter((n) => n.is_pinned)
     case 'daily':
-      return visible
+      return notes
         .filter((n) => n.content_mode === 'daily')
         .sort((a, b) => (b.daily_date || '').localeCompare(a.daily_date || ''))
     case 'orphans': {
       const notesWithTags = new Set(noteTags.map((nt) => nt.note_id))
-      return visible.filter((n) => !notesWithTags.has(n.id))
+      return notes.filter((n) => !notesWithTags.has(n.id))
     }
     default:
-      return visible
+      return notes
   }
 }
 

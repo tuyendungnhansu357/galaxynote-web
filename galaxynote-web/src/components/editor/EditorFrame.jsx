@@ -9,7 +9,6 @@ import { supabase } from '../../lib/supabase'
 import { uploadImageBlob, dataUrlToBlob } from '../../lib/attachments'
 import { syncLinksFromContent } from '../../lib/links'
 import { syncTasksFromContent } from '../../lib/tasks'
-import { countWordsAndChars } from '../../lib/wordCount'
 
 // Same shape as the QSS "dark" theme desktop applies via editorCmd.applyTheme()
 // — exact values from ui/note_editor.py::set_theme(is_dark=True).
@@ -70,7 +69,7 @@ function urlToDataUrl(url) {
  * Storage — that upload direction (web → Storage) is the next piece of
  * attachment work, not done in this pass.
  */
-const EditorFrame = forwardRef(function EditorFrame({ note, onReady, onFindResult, onBridgeTrigger, onContentChange, onWordCount }, ref) {
+const EditorFrame = forwardRef(function EditorFrame({ note, onReady, onFindResult, onBridgeTrigger, onContentChange }, ref) {
   const iframeRef = useRef(null)
   const readyRef = useRef(false)
   const saveTimerRef = useRef(null)
@@ -195,7 +194,6 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady, onFindResul
 
           case 'on_change': {
             const json = args[0]
-            onWordCount?.(countWordsAndChars(json))
             if (onContentChange) {
               // Standalone mode (e.g. Template Manager composing a
               // template's content) — capture locally instead of
@@ -337,14 +335,6 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady, onFindResul
           case 'trigger_edit_image_url':
             break
 
-          // Right-click on a task row → set/clear due date. Mirrors
-          // desktop's _Bridge.on_task_set_due (ui/note_editor.py).
-          case 'on_task_set_due': {
-            const [blockId, dateStr] = args
-            if (note) useTaskStore.getState().setDueDateByBlockId(note.id, blockId, dateStr)
-            break
-          }
-
           default:
             break
         }
@@ -353,7 +343,7 @@ const EditorFrame = forwardRef(function EditorFrame({ note, onReady, onFindResul
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [note, theme, postToIframe, respond, flushPendingSave, onReady, onFindResult, onBridgeTrigger, onContentChange, onWordCount])
+  }, [note, theme, postToIframe, respond, flushPendingSave, onReady, onFindResult, onBridgeTrigger, onContentChange])
 
   // When switching notes, push the new content in once the iframe is ready.
   useEffect(() => {
