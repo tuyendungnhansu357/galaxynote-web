@@ -128,11 +128,9 @@ export default function NoteEditorWidget({ note }) {
           onWordCount={setWordCount}
         />
       </div>
-      {wordCount.words > 0 && (
-        <div className="border-t border-line px-8 py-1 text-right text-[11px] text-fg-mute">
-          {wordCount.words.toLocaleString('vi-VN')} từ · {wordCount.chars.toLocaleString('vi-VN')} ký tự
-        </div>
-      )}
+      <div className="border-t border-line px-8 py-1 text-right text-[11px] text-fg-mute">
+        {wordCount.words.toLocaleString('vi-VN')} từ · {wordCount.chars.toLocaleString('vi-VN')} ký tự
+      </div>
     </div>
   )
 }
