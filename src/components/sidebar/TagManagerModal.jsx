@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { X, Plus, Trash2, Orbit, Combine, Wand2 } from 'lucide-react'
+import { X, Plus, Trash2, Orbit, Combine, Wand2, Search } from 'lucide-react'
 import { useTagStore } from '../../stores/tagStore'
 import { useTaskStore } from '../../stores/taskStore'
 import Button from '../ui/Button'
@@ -18,11 +18,27 @@ export default function TagManagerModal({ onClose }) {
   const { tags, relations, noteTags, createTag, updateTag, deleteTag, addRelation, removeRelation, mergeTags, mergeDuplicateTags } = useTagStore()
   const [selectedId, setSelectedId] = useState(tags[0]?.id ?? null)
   const [draft, setDraft] = useState(null) // local edit buffer, null = viewing selected as-is
+  const [search, setSearch] = useState('')
   const [addParentId, setAddParentId] = useState('')
   const [addChildId, setAddChildId] = useState('')
   const [mergeTargetId, setMergeTargetId] = useState('')
   const [merging, setMerging] = useState(false)
   const [dedupeRunning, setDedupeRunning] = useState(false)
+
+  // Alphabetical everywhere a tag shows up in this modal (list + all three
+  // dropdowns) rather than raw insertion order. This matters more as the
+  // tag count grows: it makes the left list scannable, and it's what makes
+  // a <select>'s native "type a letter to jump" behavior actually useful
+  // once there are dozens/hundreds of tags in a dropdown.
+  const sortedTags = useMemo(
+    () => [...tags].sort((a, b) => a.name.localeCompare(b.name)),
+    [tags]
+  )
+  const filteredTags = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return sortedTags
+    return sortedTags.filter((t) => t.name.toLowerCase().includes(q))
+  }, [sortedTags, search])
 
   const selected = tags.find((t) => t.id === selectedId) ?? null
   const form = draft ?? selected
@@ -98,23 +114,35 @@ export default function TagManagerModal({ onClose }) {
     }
   }
 
-  const availableParents = tags.filter(
+  const availableParents = sortedTags.filter(
     (t) => t.id !== selectedId && !parents.some((p) => p.id === t.id)
   )
-  const availableChildren = tags.filter(
+  const availableChildren = sortedTags.filter(
     (t) => t.id !== selectedId && !children.some((c) => c.id === t.id)
   )
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="flex h-[560px] w-[720px] overflow-hidden rounded-2xl border border-line bg-panel shadow-2xl">
+      <div className="flex h-[85vh] max-h-[780px] w-[900px] max-w-[94vw] overflow-hidden rounded-2xl border border-line bg-panel shadow-2xl">
         {/* Left: tag list */}
-        <div className="flex w-[240px] shrink-0 flex-col border-r border-line">
+        <div className="flex w-[280px] shrink-0 flex-col border-r border-line">
           <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
             <h2 className="font-display text-sm font-semibold text-fg">Quản lý Tag</h2>
+            <span className="text-[11px] text-fg-mute">{tags.length} tag</span>
+          </div>
+          <div className="border-b border-line p-2">
+            <div className="relative">
+              <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-mute" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Tìm tag…"
+                className="w-full rounded-md border border-line bg-bg py-1.5 pl-7 pr-2 text-xs text-fg-dim outline-none focus:border-star"
+              />
+            </div>
           </div>
           <ul className="flex-1 overflow-y-auto p-1.5">
-            {tags.map((t) => (
+            {filteredTags.map((t) => (
               <li key={t.id}>
                 <button
                   onClick={() => select(t.id)}
@@ -125,12 +153,15 @@ export default function TagManagerModal({ onClose }) {
                   {t.is_space ? (
                     <Orbit size={13} style={{ color: t.color }} />
                   ) : (
-                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: t.color }} />
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: t.color }} />
                   )}
                   <span className="truncate">{t.icon ? `${t.icon} ` : ''}{t.name}</span>
                 </button>
               </li>
             ))}
+            {filteredTags.length === 0 && (
+              <li className="px-2.5 py-4 text-center text-xs text-fg-mute">Không tìm thấy tag nào.</li>
+            )}
           </ul>
           <div className="border-t border-line p-2 space-y-1.5">
             <Button variant="outline" onClick={handleNewTag} className="w-full">
@@ -295,7 +326,7 @@ export default function TagManagerModal({ onClose }) {
                     className="w-full rounded-md border border-line bg-panel px-2 py-1.5 text-xs text-fg-dim outline-none"
                   >
                     <option value="">+ Gộp vào tag…</option>
-                    {tags.filter((t) => t.id !== selectedId).map((t) => (
+                    {sortedTags.filter((t) => t.id !== selectedId).map((t) => (
                       <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
                   </select>
