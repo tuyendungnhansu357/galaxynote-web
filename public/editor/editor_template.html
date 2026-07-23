@@ -4466,10 +4466,18 @@ function addCodeRow(container, code, align, w, bg){
 
   outer.appendChild(bar);
   outer.appendChild(pre);
-  outer.addEventListener('mouseenter',()=>{ barCancelHide(); bar.style.display='flex'; });
-  outer.addEventListener('mouseleave',()=>barDelayHide(bar));
+  // Show the floating toolbar only while the code block actually has focus
+  // (cursor placed inside, or a selection made) — not on mere mouse hover.
+  // Hover-to-show meant the bar flickered on for every code block the
+  // mouse happened to pass over while scrolling, which felt noisy on pages
+  // with several code blocks. barCancelHide/barDelayHide (shared with the
+  // other floating bars in this file) still guard the moment focus is
+  // about to leave: bar buttons use onmousedown+preventDefault so clicking
+  // them never blurs `pre`, and the short delay on blur covers the instant
+  // between losing focus and the mouse actually reaching the bar.
+  pre.addEventListener('focus', () => { barCancelHide(); bar.style.display = 'flex'; });
+  pre.addEventListener('blur', () => barDelayHide(bar));
   bar.addEventListener('mouseenter', barCancelHide);
-  bar.addEventListener('mouseleave', ()=>barDelayHide(bar));
   row.appendChild(outer);
   container.appendChild(row);
   return row;
