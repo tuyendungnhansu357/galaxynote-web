@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Shield, ShieldOff, Search, LogOut, Trash2 } from 'lucide-react'
+import { Shield, ShieldOff, Search, LogOut, Trash2, Plus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/authStore'
 import Button from '../components/ui/Button'
@@ -19,6 +19,12 @@ import Input from '../components/ui/Input'
 // - Creating a brand-new account without the person signing up themselves
 //   still isn't covered here — that's Dashboard → Authentication → Users →
 //   Invite, or a second Edge Function if you want it wired into this page too.
+//
+// Plan limits (max notes / max tags per plan) live in public.plan_limits
+// (supabase/plan_limits_schema.sql) and are enforced by BEFORE INSERT
+// triggers on notes/tags — not just here — so a free-plan user can't get
+// around the cap by calling the Supabase API directly instead of the app.
+// This section is only a convenience editor for those numbers.
 export default function AdminPage() {
   const { user, signOut, refreshProfile } = useAuthStore()
   const [rows, setRows] = useState([])
@@ -28,7 +34,12 @@ export default function AdminPage() {
   const [savingId, setSavingId] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
 
-  useEffect(() => { load() }, [])
+  const [limits, setLimits] = useState([])
+  const [limitsLoading, setLimitsLoading] = useState(true)
+  const [savingLimitPlan, setSavingLimitPlan] = useState(null)
+  const [newLimitPlan, setNewLimitPlan] = useState('')
+
+  useEffect(() => { load(); loadLimits() }, [])
 
   async function load() {
     setLoading(true)
@@ -39,6 +50,59 @@ export default function AdminPage() {
     if (error) setError(error.message)
     else setRows(data ?? [])
     setLoading(false)
+  }
+
+  async function loadLimits() {
+    setLimitsLoading(true)
+    const { data, error } = await supabase.from('plan_limits').select('*').order('plan')
+    if (error) setError(error.message)
+    else setLimits(data ?? [])
+    setLimitsLoading(false)
+  }
+
+  function toIntOrNull(v) {
+    const s = String(v ?? '').trim()
+    if (!s) return null // empty field = unlimited
+    const n = parseInt(s, 10)
+    return Number.isFinite(n) && n >= 0 ? n : null
+  }
+
+  async function patchLimit(plan, patch) {
+    setSavingLimitPlan(plan)
+    setError('')
+    const { data, error } = await supabase
+      .from('plan_limits')
+      .update(patch)
+      .eq('plan', plan)
+      .select()
+      .single()
+    setSavingLimitPlan(null)
+    if (error) { setError(error.message); return }
+    setLimits((prev) => prev.map((l) => (l.plan === plan ? data : l)))
+  }
+
+  async function addLimit() {
+    const plan = newLimitPlan.trim().toLowerCase()
+    if (!plan) return
+    if (limits.some((l) => l.plan === plan)) { setError(`Gói "${plan}" đã có cấu hình.`); return }
+    setError('')
+    const { data, error } = await supabase
+      .from('plan_limits')
+      .insert({ plan, max_notes: null, max_tags: null })
+      .select()
+      .single()
+    if (error) { setError(error.message); return }
+    setLimits((prev) => [...prev, data].sort((a, b) => a.plan.localeCompare(b.plan)))
+    setNewLimitPlan('')
+  }
+
+  async function removeLimit(plan) {
+    const ok = confirm(`Xoá cấu hình giới hạn cho gói "${plan}"? Gói này sẽ trở thành KHÔNG giới hạn.`)
+    if (!ok) return
+    setError('')
+    const { error } = await supabase.from('plan_limits').delete().eq('plan', plan)
+    if (error) { setError(error.message); return }
+    setLimits((prev) => prev.filter((l) => l.plan !== plan))
   }
 
   const filtered = useMemo(() => {
@@ -105,6 +169,81 @@ export default function AdminPage() {
             <LogOut size={14} /> Đăng xuất
           </Button>
         </div>
+      </div>
+
+      <div className="border-b border-line px-6 py-4">
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-mute">Giới hạn theo gói</h2>
+        {limitsLoading ? (
+          <p className="text-xs text-fg-mute">Đang tải…</p>
+        ) : (
+          <div className="flex flex-wrap items-end gap-3">
+            {limits.map((l) => {
+              const saving = savingLimitPlan === l.plan
+              return (
+                <div key={l.plan} className="flex items-end gap-2 rounded-lg border border-line bg-panel px-3 py-2">
+                  <div>
+                    <p className="mb-1 text-[10px] text-fg-mute">Gói</p>
+                    <p className="text-sm font-medium text-fg-dim">{l.plan}</p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10px] text-fg-mute">Tối đa note</label>
+                    <input
+                      type="number"
+                      min={0}
+                      defaultValue={l.max_notes ?? ''}
+                      placeholder="∞"
+                      disabled={saving}
+                      onBlur={(e) => {
+                        const v = toIntOrNull(e.target.value)
+                        if (v !== l.max_notes) patchLimit(l.plan, { max_notes: v })
+                      }}
+                      className="w-20 rounded-md border border-line bg-bg px-2 py-1 text-xs outline-none focus:border-star"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10px] text-fg-mute">Tối đa tag</label>
+                    <input
+                      type="number"
+                      min={0}
+                      defaultValue={l.max_tags ?? ''}
+                      placeholder="∞"
+                      disabled={saving}
+                      onBlur={(e) => {
+                        const v = toIntOrNull(e.target.value)
+                        if (v !== l.max_tags) patchLimit(l.plan, { max_tags: v })
+                      }}
+                      className="w-20 rounded-md border border-line bg-bg px-2 py-1 text-xs outline-none focus:border-star"
+                    />
+                  </div>
+                  <button
+                    onClick={() => removeLimit(l.plan)}
+                    title="Xoá cấu hình (gói sẽ thành không giới hạn)"
+                    className="rounded p-1.5 text-fg-mute hover:bg-flare/10 hover:text-flare"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              )
+            })}
+
+            <div className="flex items-end gap-2 rounded-lg border border-dashed border-line px-3 py-2">
+              <div>
+                <label className="mb-1 block text-[10px] text-fg-mute">Tên gói mới</label>
+                <input
+                  value={newLimitPlan}
+                  onChange={(e) => setNewLimitPlan(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') addLimit() }}
+                  placeholder="vd: pro"
+                  className="w-24 rounded-md border border-line bg-bg px-2 py-1 text-xs outline-none focus:border-star"
+                />
+              </div>
+              <Button variant="outline" onClick={addLimit} disabled={!newLimitPlan.trim()}>
+                <Plus size={13} /> Thêm
+              </Button>
+            </div>
+          </div>
+        )}
+        <p className="mt-2 text-[11px] text-fg-mute">Để trống (∞) = không giới hạn. Gói không có ở đây mặc định không giới hạn.</p>
       </div>
 
       <div className="border-b border-line px-6 py-3">
