@@ -19,6 +19,7 @@ import { downloadNoteAsMarkdown, downloadNoteAsHtml } from '../../lib/export'
 import { useThemeStore } from '../../stores/themeStore'
 import { useActiveEditorStore } from '../../stores/activeEditorStore'
 import { useQuickSwitcherStore } from '../../stores/quickSwitcherStore'
+import { useAuthStore } from '../../stores/authStore'
 
 /**
  * Web port of the desktop menu bar + top toolbar (SPEC §10.1: File / Edit /
@@ -48,6 +49,7 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
   const [aboutOpen, setAboutOpen] = useState(false)
   const [guideOpen, setGuideOpen] = useState(false)
   const { isDark, toggleTheme } = useThemeStore()
+  const isAdmin = useAuthStore((s) => s.profile?.is_admin)
   const editor = useActiveEditorStore((s) => s.editor)
   const editorReady = useActiveEditorStore((s) => s.ready)
   const openQuickSwitcher = useQuickSwitcherStore((s) => s.open)
@@ -135,6 +137,14 @@ export default function TopBar({ sidebarVisible, onToggleSidebar, backlinksVisib
             { label: 'Tag mới', onClick: handleNewTag },
           ]}
         />
+        {isAdmin && (
+          <MenuDropdown
+            label="Quản trị"
+            items={[
+              { label: '👤  Quản lý người dùng…', onClick: () => navigate('/admin') },
+            ]}
+          />
+        )}
         <MenuDropdown
           label="Help"
           items={[

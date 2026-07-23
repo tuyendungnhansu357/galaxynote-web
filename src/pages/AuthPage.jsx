@@ -3,6 +3,12 @@ import { useAuthStore } from '../stores/authStore'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 
+// Public signup stays enabled — access itself is gated by public.profiles
+// (is_active / plan_expires_at), enforced in App.jsx's RequireAuth. A new
+// account gets a 7-day trial row auto-created by the on_auth_user_created
+// DB trigger (see supabase/user_management_schema.sql); after that, an
+// admin decides in /admin whether to extend it, assign a real plan, or
+// leave it to expire.
 export default function AuthPage() {
   const [mode, setMode] = useState('signin') // 'signin' | 'signup'
   const [email, setEmail] = useState('')
@@ -19,7 +25,7 @@ export default function AuthPage() {
     const ok = mode === 'signin' ? await signIn(email, password) : await signUp(email, password)
     setSubmitting(false)
     if (ok && mode === 'signup') {
-      setNotice('Account created. If email confirmation is on, check your inbox before signing in.')
+      setNotice('Đã tạo tài khoản — bạn có 7 ngày dùng thử. Nếu cần xác nhận email, hãy kiểm tra hộp thư trước khi đăng nhập.')
     }
   }
 
