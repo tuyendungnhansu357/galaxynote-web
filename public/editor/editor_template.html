@@ -553,13 +553,21 @@ function attachPh(el){
 }
 
 // ── Notify (debounced 300ms) ─────────────────────────────────────────────────
-// Delayed bar hide helper — prevents toolbar from vanishing when moving to it
-let _barHideTimer = null;
+// Delayed bar hide helper — prevents toolbar from vanishing when moving to it.
+// The pending-hide timer is stored ON the bar element itself (bar._hideTimer),
+// not in one shared module-level variable — a single shared timer meant that
+// focusing/hovering toolbar B cancelled toolbar A's still-pending hide,
+// leaving A visible forever. That was rare with hover-only bars (image/embed/
+// table), but became the common case once the code-block bar started
+// tracking focus/blur: clicking from one code block straight into another
+// fires blur(A) immediately followed by focus(B), and A's hide must not be
+// the one that gets cancelled by B's cancel call.
 function barDelayHide(bar){
-  _barHideTimer = setTimeout(()=>{ bar.style.display='none'; }, 250);
+  if(bar._hideTimer) clearTimeout(bar._hideTimer);
+  bar._hideTimer = setTimeout(()=>{ bar.style.display='none'; bar._hideTimer=null; }, 250);
 }
-function barCancelHide(){
-  if(_barHideTimer){ clearTimeout(_barHideTimer); _barHideTimer=null; }
+function barCancelHide(bar){
+  if(bar && bar._hideTimer){ clearTimeout(bar._hideTimer); bar._hideTimer=null; }
 }
 
 function notifyDebounced(){
@@ -1797,7 +1805,7 @@ function addTableRow(container, rowsData, focus, bg){
   bar.appendChild(_sp.cloneNode());
   bar.appendChild(mkB('🗑',()=>{row.remove();notify();}));
   outer.appendChild(bar);
-  outer.addEventListener('mouseenter',()=>{ barCancelHide(); bar.style.display='flex'; });
+  outer.addEventListener('mouseenter',()=>{ barCancelHide(bar); bar.style.display='flex'; });
   outer.addEventListener('mouseleave',()=>barDelayHide(bar));
 
   // tblOuter: inline-block so width control works, has room for add-col on right
@@ -2864,9 +2872,9 @@ function addQuoteRow(container, text, align, w, bg){
   if((align||'left')==='center'){qEl.style.marginLeft='auto';qEl.style.marginRight='auto';}
   else if(align==='right'){qEl.style.marginLeft='auto';qEl.style.marginRight='0';}
   outer.appendChild(bar);outer.appendChild(qEl);
-  outer.addEventListener('mouseenter',()=>{ barCancelHide(); bar.style.display='flex'; });
+  outer.addEventListener('mouseenter',()=>{ barCancelHide(bar); bar.style.display='flex'; });
   outer.addEventListener('mouseleave',()=>barDelayHide(bar));
-  bar.addEventListener('mouseenter',barCancelHide);
+  bar.addEventListener('mouseenter',()=>barCancelHide(bar));
   bar.addEventListener('mouseleave',()=>barDelayHide(bar));
   row.appendChild(outer);container.appendChild(row);return row;
 }
@@ -2992,9 +3000,9 @@ function addCalloutRow(container, icon, children, color, align, w, bg){
   wrap.appendChild(addBtn);
 
   // ── Hover toolbar ─────────────────────────────────────────────────────────
-  wrap.addEventListener('mouseenter', () => { barCancelHide(); toolbar.style.display = 'flex'; });
+  wrap.addEventListener('mouseenter', () => { barCancelHide(toolbar); toolbar.style.display = 'flex'; });
   wrap.addEventListener('mouseleave', () => barDelayHide(toolbar));
-  toolbar.addEventListener('mouseenter', barCancelHide);
+  toolbar.addEventListener('mouseenter', () => barCancelHide(toolbar));
   toolbar.addEventListener('mouseleave', () => barDelayHide(toolbar));
 
   row.appendChild(wrap);
@@ -3574,10 +3582,10 @@ const editorCmd = window.editorCmd = {
     iframeWrap.innerHTML=html;
     const iframe=iframeWrap.querySelector('iframe');if(iframe){iframe.style.display='block';iframe.style.maxWidth='100%';}
     outerWrap.appendChild(bar);outerWrap.appendChild(iframeWrap);
-    outerWrap.addEventListener('mouseenter',()=>{ barCancelHide(); bar.style.display='flex'; });
+    outerWrap.addEventListener('mouseenter',()=>{ barCancelHide(bar); bar.style.display='flex'; });
     outerWrap.addEventListener('mouseleave',()=>barDelayHide(bar));
     // Bar is position:absolute outside outerWrap — must cancel hide when mouse enters bar
-    bar.addEventListener('mouseenter', barCancelHide);
+    bar.addEventListener('mouseenter', ()=>barCancelHide(bar));
     bar.addEventListener('mouseleave', ()=>barDelayHide(bar));
     // Drag-resize handle below embed
     const _eResizeBar=document.createElement('div');
@@ -4475,9 +4483,9 @@ function addCodeRow(container, code, align, w, bg){
   // about to leave: bar buttons use onmousedown+preventDefault so clicking
   // them never blurs `pre`, and the short delay on blur covers the instant
   // between losing focus and the mouse actually reaching the bar.
-  pre.addEventListener('focus', () => { barCancelHide(); bar.style.display = 'flex'; });
+  pre.addEventListener('focus', () => { barCancelHide(bar); bar.style.display = 'flex'; });
   pre.addEventListener('blur', () => barDelayHide(bar));
-  bar.addEventListener('mouseenter', barCancelHide);
+  bar.addEventListener('mouseenter', () => barCancelHide(bar));
   row.appendChild(outer);
   container.appendChild(row);
   return row;
@@ -4574,9 +4582,9 @@ function addPdfRow(container, absPath, relPath, filename, w, align, h, bg){
   outer.appendChild(bar);
   outer.appendChild(iframe);
   outer.appendChild(resizeBar);
-  bar.addEventListener('mouseenter',barCancelHide);
+  bar.addEventListener('mouseenter',()=>barCancelHide(bar));
   bar.addEventListener('mouseleave',()=>barDelayHide(bar));
-  outer.addEventListener('mouseenter',()=>{ barCancelHide(); bar.style.display='flex'; });
+  outer.addEventListener('mouseenter',()=>{ barCancelHide(bar); bar.style.display='flex'; });
   outer.addEventListener('mouseleave',()=>barDelayHide(bar));
   row.appendChild(outer);container.appendChild(row);return row;
 }
