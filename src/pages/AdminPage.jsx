@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Shield, ShieldOff, Search, LogOut } from 'lucide-react'
+import { Shield, ShieldOff, Search, LogOut, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/authStore'
 import Button from '../components/ui/Button'
@@ -10,17 +10,15 @@ import Input from '../components/ui/Input'
 // supabase/user_management_schema.sql (only a row where is_admin() is true
 // for the calling user may select/update/delete *other* users' rows).
 //
-// What this page can and can't do, and why:
-//  - Edit plan / expiry / active / admin flag on any existing profile: yes,
-//    plain RLS-scoped update — no elevated key needed.
-//  - "Delete" a user: soft-delete only (sets is_active=false). Permanently
-//    removing the auth.users row itself requires the Admin API, which
-//    needs the service_role key — that key must never reach the browser,
-//    so a real hard-delete has to happen in Supabase Dashboard →
-//    Authentication → Users, or via a server-side Edge Function you deploy
-//    yourself (ask if you'd like that written up).
-//  - Create a brand-new account without the person signing up themselves:
-//    same limitation — use Dashboard → Authentication → Users → Invite.
+// - Edit plan / expiry / active / admin flag on any existing profile: plain
+//   RLS-scoped update, no elevated key needed.
+// - "Xoá vĩnh viễn": calls the admin-delete-user Edge Function (see
+//   supabase/functions/admin-delete-user/index.ts), which is the only place
+//   the service_role key is used — it must never reach the browser, so the
+//   actual auth.users delete happens server-side, not here.
+// - Creating a brand-new account without the person signing up themselves
+//   still isn't covered here — that's Dashboard → Authentication → Users →
+//   Invite, or a second Edge Function if you want it wired into this page too.
 export default function AdminPage() {
   const { user, signOut, refreshProfile } = useAuthStore()
   const [rows, setRows] = useState([])
@@ -28,6 +26,7 @@ export default function AdminPage() {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [savingId, setSavingId] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
 
   useEffect(() => { load() }, [])
 
@@ -74,6 +73,25 @@ export default function AdminPage() {
     return new Date(`${dateStr}T23:59:59`).toISOString()
   }
 
+  async function handleDelete(row) {
+    if (row.id === user?.id) return // guarded server-side too, but no point round-tripping
+    const ok = confirm(
+      `Xoá VĨNH VIỄN tài khoản ${row.email}?\n\nKhông thể hoàn tác — mọi note, tag, task của tài khoản này cũng sẽ mất.`
+    )
+    if (!ok) return
+    setDeletingId(row.id)
+    setError('')
+    const { data, error } = await supabase.functions.invoke('admin-delete-user', {
+      body: { userId: row.id },
+    })
+    setDeletingId(null)
+    if (error || data?.error) {
+      setError(data?.error || error.message)
+      return
+    }
+    setRows((prev) => prev.filter((r) => r.id !== row.id))
+  }
+
   return (
     <div className="flex h-screen w-screen flex-col bg-bg text-fg">
       <div className="flex items-center justify-between border-b border-line px-6 py-3">
@@ -111,6 +129,7 @@ export default function AdminPage() {
                 <th className="py-2 pr-3 font-medium">Trạng thái</th>
                 <th className="py-2 pr-3 font-medium">Admin</th>
                 <th className="py-2 pr-3 font-medium">Tham gia</th>
+                <th className="py-2 pr-3 font-medium"></th>
               </tr>
             </thead>
             <tbody>
@@ -169,11 +188,23 @@ export default function AdminPage() {
                     <td className="py-2 pr-3 text-xs text-fg-mute">
                       {new Date(r.created_at).toLocaleDateString('vi-VN')}
                     </td>
+                    <td className="py-2 pr-3 text-right">
+                      {!isSelf && (
+                        <button
+                          disabled={deletingId === r.id}
+                          onClick={() => handleDelete(r)}
+                          title="Xoá vĩnh viễn tài khoản"
+                          className="rounded p-1.5 text-fg-mute hover:bg-flare/10 hover:text-flare disabled:opacity-40"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 )
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={6} className="py-8 text-center text-xs text-fg-mute">Không tìm thấy tài khoản nào.</td></tr>
+                <tr><td colSpan={7} className="py-8 text-center text-xs text-fg-mute">Không tìm thấy tài khoản nào.</td></tr>
               )}
             </tbody>
           </table>
@@ -181,8 +212,8 @@ export default function AdminPage() {
       </div>
 
       <div className="border-t border-line px-6 py-2 text-[11px] text-fg-mute">
-        "Khoá" chặn truy cập ngay lập tức nhưng không xoá tài khoản đăng nhập. Để xoá vĩnh viễn, dùng
-        Supabase Dashboard → Authentication → Users.
+        "Khoá" chặn truy cập ngay lập tức, có thể mở lại. Biểu tượng thùng rác ở cuối mỗi dòng xoá{' '}
+        <span className="text-flare">vĩnh viễn</span>, không thể hoàn tác.
       </div>
     </div>
   )
